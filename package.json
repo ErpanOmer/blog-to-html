@@ -1,0 +1,19 @@
+{
+  "name": "blog-to-html",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "run-cloude.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cloude": "node --env-file=.env run-cloude.js",
+    "local": "node run-local.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "ollama": "^0.6.3"
+  }
+}
