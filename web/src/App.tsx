@@ -95,8 +95,15 @@ function App() {
       const res = await fetch('/api/models')
       const data = await res.json()
       if (data.models && data.models.length > 0) {
-        setModels(data.models)
-        setSelectedModel(data.models[0])
+        const sortedModels = [...data.models].sort((a, b) => {
+          const aIsCloud = a.toLowerCase().includes('cloud')
+          const bIsCloud = b.toLowerCase().includes('cloud')
+          if (aIsCloud && !bIsCloud) return 1
+          if (!aIsCloud && bIsCloud) return -1
+          return 0
+        })
+        setModels(sortedModels)
+        setSelectedModel(sortedModels[0])
       }
     } catch (err) {
       console.error('Failed to fetch models:', err)
@@ -293,13 +300,13 @@ function App() {
   )
 
   return (
-    <div className="min-h-screen p-4 md:p-6 selection:bg-primary/30">
+    <div className="min-h-screen p-3 sm:p-4 md:p-6 lg:p-8 selection:bg-primary/30">
       <div className="mx-auto max-w-6xl space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
         <header className="text-center space-y-2 pt-2 pb-4">
-          <div className="inline-block p-1.5 rounded-xl bg-primary/10 mb-1 animate-glow">
-            <Sparkles className="h-8 w-8 text-primary" />
+          <div className="inline-block p-1.5 rounded-xl bg-[oklch(0.65_0.25_285/0.15)] mb-1 animate-glow transition-all duration-300">
+            <Sparkles className="h-8 w-8 text-[oklch(0.65_0.25_285)]" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-gradient">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight gradient-text-vibrant drop-shadow-[0_2px_10px_oklch(0.65_0.25_285/0.3)] animate-glow">
             Blog To HTML
           </h1>
           <p className="text-muted-foreground text-base font-medium max-w-xl mx-auto opacity-80">
@@ -308,13 +315,13 @@ function App() {
         </header>
 
         <div className="grid gap-6 grid-cols-1">
-          <Card className="glass-card overflow-hidden border border-white/5">
-            <CardHeader className="pb-4 border-b border-white/5 px-6">
+          <Card className="glass-card overflow-hidden border border-[oklch(1_0_0/0.05)]">
+            <CardHeader className="pb-4 border-b border-[oklch(1_0_0/0.05)] px-6">
               <SectionHeader icon={FileText} title="输入源" iconVariant="blue" actions={modelSelector} />
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <Tabs value={sourceType} onValueChange={(v) => setSourceType(v as 'googledocs' | 'md')} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 p-1 bg-black/20 rounded-lg h-10">
+                <TabsList className="grid w-full grid-cols-2 p-1 bg-[oklch(0_0_0/0.2)] backdrop-blur-lg rounded-lg h-10">
                   <TabsTrigger value="googledocs" className="text-base rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
                     <Globe className="h-3.5 w-3.5 mr-1.5" />
                     Google Docs
@@ -333,10 +340,10 @@ function App() {
                         placeholder="粘贴 Google Docs 链接..."
                         value={googleDocsUrl}
                         onChange={(e) => setGoogleDocsUrl(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                        className="w-full rounded-xl border border-[oklch(1_0_0/0.15)] bg-[oklch(1_0_0/0.06)] backdrop-blur-lg px-4 py-3 text-sm transition-all duration-300 focus:border-[oklch(0.65_0.25_285/0.5)] focus:outline-none focus:ring-2 focus:ring-[oklch(0.65_0.25_285/0.2)] focus:bg-[oklch(1_0_0/0.08)] hover:border-[oklch(1_0_0/0.2)]"
                       />
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic flex items-center gap-1.5 ml-1">
+                    <p className="text-[10px] text-muted-foreground italic flex items-center gap-1.5 ml-1 opacity-80">
                       <AlertCircle className="h-3 w-3" />
                       请确保文档已设置为「任何人均可查看」
                     </p>
@@ -345,7 +352,7 @@ function App() {
 
                 <TabsContent value="md" className="mt-4 space-y-3 animate-in slide-in-from-right-1 duration-200">
                   <div
-                    className="relative border border-dashed border-white/10 rounded-xl p-8 text-center transition-all hover:border-primary/30 hover:bg-primary/5 cursor-pointer group"
+                    className="relative border border-dashed border-[oklch(1_0_0/0.15)] rounded-xl p-8 text-center transition-all duration-300 hover:border-[oklch(0.65_0.25_285/0.3)] hover:bg-[oklch(0.65_0.25_285/0.05)] cursor-pointer group bg-[oklch(1_0_0/0.03)] backdrop-blur-lg"
                     onDrop={handleDrop}
                     onDragOver={(e) => e.preventDefault()}
                     onClick={() => fileInputRef.current?.click()}
@@ -358,8 +365,8 @@ function App() {
                       className="hidden"
                     />
                     <div className="space-y-3">
-                      <div className="p-2.5 rounded-full bg-primary/10 w-fit mx-auto">
-                        <Download className="h-6 w-6 text-primary" />
+                      <div className="p-2.5 rounded-full bg-[oklch(0.65_0.25_285/0.15)] w-fit mx-auto transition-all duration-300 group-hover:scale-110 group-hover:bg-[oklch(0.65_0.25_285/0.25)]">
+                        <Download className="h-6 w-6 text-[oklch(0.65_0.25_285)] transition-colors duration-300 group-hover:text-[oklch(0.7_0.25_285)]" />
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-sm font-bold">点击或拖放 .md 文件</p>
@@ -407,8 +414,8 @@ function App() {
             </CardContent>
           </Card>
 
-          <Card className="glass-card overflow-hidden border border-white/5">
-            <CardHeader className="pb-4 border-b border-white/5 px-6">
+          <Card className="glass-card overflow-hidden border border-[oklch(1_0_0/0.05)]">
+            <CardHeader className="pb-4 border-b border-[oklch(1_0_0/0.05)] px-6">
               <SectionHeader icon={Code2} title="HTML 输出" iconVariant="cyan" actions={viewToggleButtons} />
             </CardHeader>
             <CardContent className="p-6 space-y-4">
@@ -453,7 +460,7 @@ function App() {
                 </StatusAlert>
               )}
 
-              <div className="relative rounded-xl border border-white/10 bg-black/40 overflow-hidden shadow-inner font-mono text-sm group">
+              <div className="relative rounded-xl border border-[oklch(1_0_0/0.15)] bg-[oklch(0_0_0/0.4)] backdrop-blur-lg overflow-hidden shadow-inner font-mono text-sm group hover:border-[oklch(0.65_0.25_285/0.2)] transition-all duration-300">
                 {viewMode === 'code' ? (
                   <div
                     ref={scrollRef}
@@ -491,7 +498,7 @@ function App() {
           </Card>
         </div>
 
-        <footer className="pt-4 pb-8 border-t border-white/5 mt-6 text-center">
+        <footer className="pt-6 pb-10 border-t border-[oklch(1_0_0/0.05)] mt-8 text-center">
           <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
             Semantic HTML • Precise Transformation • Cloud Ready
           </p>

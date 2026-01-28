@@ -52,7 +52,7 @@
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.65 0.25 285);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
@@ -77,16 +77,23 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
+  
+  /* 新增渐变和增强色彩 */
+  --gradient-primary: linear-gradient(135deg, oklch(0.65 0.25 285), oklch(0.7 0.2 260));
+  --gradient-accent: linear-gradient(135deg, oklch(0.75 0.25 200), oklch(0.7 0.2 280));
+  --glass-bg: oklch(1 0 0 / 0.08);
+  --glass-border: oklch(1 0 0 / 0.12);
+  --glow-primary: oklch(0.65 0.25 285 / 0.4);
 }
 
 .dark {
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
+  --card: oklch(0.21 0.006 285.885 / 0.8);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
+  --primary: oklch(0.75 0.25 285);
   --primary-foreground: oklch(0.21 0.006 285.885);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -111,6 +118,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+  
+  /* 暗色主题渐变和增强色彩 */
+  --gradient-primary: linear-gradient(135deg, oklch(0.75 0.25 285), oklch(0.8 0.2 260));
+  --gradient-accent: linear-gradient(135deg, oklch(0.8 0.25 200), oklch(0.75 0.2 280));
+  --glass-bg: oklch(1 0 0 / 0.06);
+  --glass-border: oklch(1 0 0 / 0.08);
+  --glow-primary: oklch(0.75 0.25 285 / 0.5);
 }
 
 @layer base {
@@ -121,9 +135,11 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(at 0% 0%, oklch(0.25 0.05 260 / 0.1) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.25 0.05 280 / 0.1) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, oklch(0.65 0.25 285 / 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.7 0.2 260 / 0.15) 0px, transparent 50%),
+      linear-gradient(135deg, oklch(0.15 0.01 285) 0%, oklch(0.1 0.01 260) 100%);
     background-attachment: fixed;
+    animation: backgroundShift 15s ease-in-out infinite alternate;
   }
 }
 
@@ -146,25 +162,49 @@
   }
 
   .glass-card {
-    @apply bg-card/40 backdrop-blur-md border border-white/5 shadow-2xl;
+    @apply bg-[oklch(1_0_0/0.08)] backdrop-blur-2xl border border-[oklch(1_0_0/0.12)] shadow-2xl;
+    transition: all 0.5s ease;
+  }
+
+  .glass-card:hover {
+    @apply shadow-[oklch(0.65_0.25_285/0.1)] scale-[1.02];
   }
 
   .text-gradient {
     @apply bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent;
   }
 
+  .gradient-bg-primary {
+    background: linear-gradient(135deg, oklch(0.65 0.25 285), oklch(0.7 0.2 260));
+  }
+
+  .gradient-text-vibrant {
+    background: linear-gradient(135deg, #818cf8, #06b6d4, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .glow-enhanced {
+    filter: drop-shadow(0 0 20px oklch(0.65 0.25 285 / 0.4));
+  }
+
+  @keyframes backgroundShift {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+
   .animate-glow {
-    animation: glow 4s ease-in-out infinite alternate;
+    animation: glow 3s ease-in-out infinite alternate, float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
   }
 
   @keyframes glow {
-    from {
-      filter: drop-shadow(0 0 10px oklch(0.6 0.2 260 / 0.3));
-    }
-
-    to {
-      filter: drop-shadow(0 0 25px oklch(0.6 0.2 260 / 0.6));
-    }
+    from { filter: drop-shadow(0 0 15px oklch(0.65 0.25 285 / 0.4)); }
+    to { filter: drop-shadow(0 0 30px oklch(0.65 0.25 285 / 0.6)); }
   }
 
   .icon-box {

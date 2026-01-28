@@ -12,11 +12,28 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5173,
+    strictPort: false,
+    host: true,
+    open: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        secure: false,
       },
     },
+    hmr: {
+      overlay: true,
+      protocol: 'ws',
+      host: 'localhost',
+    },
+    watch: {
+      usePolling: false,
+      interval: 100,
+    },
+  },
+  build: {
+    sourcemap: true,
   },
 })

@@ -1,0 +1,26 @@
+{
+  "watch": [
+    "server.js",
+    "prompt.txt"
+  ],
+  "ext": "js,txt",
+  "ignore": [
+    "node_modules/",
+    "web/",
+    "dist/",
+    ".git/"
+  ],
+  "exec": "node --env-file=.env server.js",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": "1000",
+  "verbose": true,
+  "colours": true,
+  "events": {
+    "start": "echo \"\\n🚀 [Backend] Server starting...\"",
+    "restart": "echo \"\\n🔄 [Backend] Server restarting due to file changes...\"",
+    "crash": "echo \"\\n❌ [Backend] Server crashed!\"",
+    "exit": "echo \"\\n👋 [Backend] Server stopped\""
+  }
+}

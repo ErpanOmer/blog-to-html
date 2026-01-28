@@ -9,15 +9,22 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: 
+          "bg-gradient-to-r from-[oklch(0.65_0.25_285)] to-[oklch(0.7_0.2_260)] " +
+          "text-primary-foreground hover:scale-105 hover:shadow-xl " +
+          "hover:shadow-[oklch(0.65_0.25_285/0.3)] " +
+          "transition-all duration-300 active:scale-[0.98]",
+        ghost: 
+          "hover:bg-gradient-to-r hover:from-[oklch(0.65_0.25_285/0.1)] " +
+          "hover:to-[oklch(0.7_0.2_260/0.1)] hover:scale-105",
+        secondary:
+          "bg-[oklch(1_0_0/0.08)] backdrop-blur-lg border border-[oklch(1_0_0/0.12)] " +
+          "hover:bg-[oklch(0.65_0.25_285/0.1)] hover:border-[oklch(0.65_0.25_285/0.3)] " +
+          "hover:scale-105 transition-all duration-300",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
           "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

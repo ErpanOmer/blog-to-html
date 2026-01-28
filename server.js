@@ -11,10 +11,16 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const isDevelopment = process.env.NODE_ENV === 'development'
 
 // Middleware
 app.use(express.json())
-app.use(express.static(path.join(__dirname, 'web/dist')))
+
+// Only serve static files in production mode
+// In development, frontend runs on port 5173 with Vite dev server
+if (!isDevelopment) {
+  app.use(express.static(path.join(__dirname, 'web/dist')))
+}
 
 // Multer configuration for file uploads
 const storage = multer.memoryStorage()
@@ -178,11 +184,19 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 })
 
-// Serve React app for any other routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'web/dist/index.html'))
-})
+// Serve React app for any other routes (production only)
+if (!isDevelopment) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'web/dist/index.html'))
+  })
+}
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`)
+  if (isDevelopment) {
+    console.log(`📝 Development mode: Frontend runs on http://localhost:5173`)
+    console.log(`🔗 API available at http://localhost:${PORT}/api`)
+  } else {
+    console.log(`🌐 Production mode: Serving static files from web/dist`)
+  }
 })

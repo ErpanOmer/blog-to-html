@@ -15,13 +15,13 @@ export function IconBox({ icon: Icon, variant = 'blue', size = 'md', className =
   }
 
   const variantClasses = {
-    blue: 'icon-box-blue',
-    cyan: 'icon-box-cyan',
-    primary: 'icon-box-primary'
+    blue: 'bg-[oklch(0.65_0.25_285/0.2)] text-[oklch(0.65_0.25_285)]',
+    cyan: 'bg-[oklch(0.75_0.25_200/0.2)] text-[oklch(0.75_0.25_200)]',
+    primary: 'bg-[oklch(0.65_0.25_285/0.1)] text-[oklch(0.65_0.25_285)]'
   }
 
   return (
-    <div className={`icon-box ${variantClasses[variant]} ${className}`}>
+    <div className={`p-1.5 rounded-lg transition-all duration-300 hover:scale-110 hover:shadow-lg ${variantClasses[variant]} ${className}`}>
       <Icon className={sizeClasses[size]} />
     </div>
   )
