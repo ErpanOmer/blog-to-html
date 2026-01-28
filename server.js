@@ -22,11 +22,12 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      file.originalname.endsWith('.docx')) {
+    if (file.mimetype === 'text/markdown' ||
+      file.mimetype === 'text/x-markdown' ||
+      file.originalname.endsWith('.md')) {
       cb(null, true)
     } else {
-      cb(new Error('Only .docx files are allowed'))
+      cb(new Error('Only .md files are allowed'))
     }
   }
 })
@@ -36,13 +37,13 @@ const SYSTEM_PROMPT = fs.readFileSync('./prompt.txt', 'utf8')
 
 // Initialize Ollama client
 const ollama = new Ollama({
-  host: 'https://ollama.com',
+  host: process.env.OLLAMA_HOST || 'https://ollama.com',
   headers: {
     Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`,
   },
 })
 
-const MODEL = 'qwen3-coder:480b-cloud'
+const DEFAULT_MODEL = 'qwen3-coder:480b-cloud'
 
 // Validation function to check HTML output
 function validateHtmlOutput(html) {
@@ -65,6 +66,7 @@ function validateHtmlOutput(html) {
 }
 
 // Extract text content from Google Docs
+// Extract text content from Google Docs
 async function fetchGoogleDocsContent(url) {
   // Convert Google Docs URL to export URL
   const docIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
@@ -73,26 +75,42 @@ async function fetchGoogleDocsContent(url) {
   }
 
   const docId = docIdMatch[1]
-  const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=docx`
+  const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=md`
 
   const response = await fetch(exportUrl)
   if (!response.ok) {
-    throw new Error('Failed to fetch Google Docs content. Make sure the document is publicly accessible.')
+    throw new Error('Failed to fetch Google Docs content. Make sure the document is publicly accessible and supports Markdown export.')
   }
 
+  // Convert response to text
   return await response.text()
 }
 
-// Extract text from DOCX file
-async function extractDocxContent(buffer) {
-  const result = await mammoth.extractRawText({ buffer })
-  return result.value
+// Extract content from Markdown file upload
+function readMarkdownContent(buffer) {
+  return buffer.toString('utf8')
 }
+
+// Models endpoint
+app.get('/api/models', async (req, res) => {
+  try {
+    const response = await ollama.list()
+
+    // Remote might return models in a different format or might not have list()
+    // Local Ollama returns { models: [{ name, ... }, ...] }
+    const modelList = response.models?.map(m => m.name) || []
+    res.json({ models: modelList, response })
+  } catch (error) {
+    console.error('Fetch models error:', error)
+    // If list() fails (e.g. on some remote hosts), return a default list or empty
+    res.json({ models: [DEFAULT_MODEL] })
+  }
+})
 
 // SSE endpoint for streaming conversion
 app.post('/api/convert', async (req, res) => {
   try {
-    const { content, sourceType, url } = req.body
+    const { content, sourceType, url, model } = req.body
 
     let inputContent = content
 
@@ -115,7 +133,7 @@ app.post('/api/convert', async (req, res) => {
 
     // Stream response from Ollama
     const response = await ollama.chat({
-      model: MODEL,
+      model: model || DEFAULT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: inputContent },
@@ -151,7 +169,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
-    const content = await extractDocxContent(req.file.buffer)
+    const content = readMarkdownContent(req.file.buffer)
     res.json({ content })
 
   } catch (error) {

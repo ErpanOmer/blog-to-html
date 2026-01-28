@@ -117,7 +117,97 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(at 0% 0%, oklch(0.25 0.05 260 / 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.25 0.05 280 / 0.1) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full transition-colors hover:bg-white/20;
+  }
+
+  .glass {
+    @apply bg-background/60 backdrop-blur-xl border border-white/10;
+  }
+
+  .glass-card {
+    @apply bg-card/40 backdrop-blur-md border border-white/5 shadow-2xl;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent;
+  }
+
+  .animate-glow {
+    animation: glow 4s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    from {
+      filter: drop-shadow(0 0 10px oklch(0.6 0.2 260 / 0.3));
+    }
+
+    to {
+      filter: drop-shadow(0 0 25px oklch(0.6 0.2 260 / 0.6));
+    }
+  }
+
+  .icon-box {
+    @apply p-1.5 rounded-lg transition-all;
+  }
+
+  .icon-box-blue {
+    @apply bg-blue-500/20 text-blue-400;
+  }
+
+  .icon-box-cyan {
+    @apply bg-cyan-500/20 text-cyan-400;
+  }
+
+  .icon-box-primary {
+    @apply bg-primary/10 text-primary;
+  }
+
+  .action-bar {
+    @apply flex items-center gap-2 bg-black/20 p-1 rounded-lg border border-white/5;
+  }
+
+  .status-alert {
+    @apply rounded-xl border border-white/5 py-3 px-4;
+  }
+
+  .status-alert-error {
+    @apply bg-destructive/10 border-destructive/20;
+  }
+
+  .status-alert-info {
+    @apply bg-primary/5 border-primary/20;
+  }
+
+  .status-alert-success {
+    @apply bg-emerald-500/5 border-emerald-500/10;
+  }
+
+  .status-alert-warning {
+    @apply bg-amber-500/5 border-amber-500/10;
+  }
+
+  .status-alert-cyan {
+    @apply bg-cyan-500/5 border-cyan-500/10;
   }
 }

@@ -4,10 +4,11 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
+    "build": "cd web && npm install && npm run build",
+    "pstart": "npm run build",
     "start": "node --env-file=.env server.js",
-    "dev": "node --env-file=.env server.js",
-    "cloude": "node --env-file=.env run-cloude.js",
-    "local": "node run-local.js"
+    "start:remote": "set OLLAMA_HOST=https://ollama.com&& npm start",
+    "start:local": "set OLLAMA_HOST=http://localhost:11434&& npm start"
   },
   "keywords": [],
   "author": "",
