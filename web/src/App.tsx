@@ -9,15 +9,16 @@ import * as htmlParser from 'prettier/plugins/html'
 import {
   Cloud,
   Monitor,
-  Sparkles,
   FileText,
   Globe,
-  Download,
+  Upload,
   Copy,
   Check,
   Code2,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Clock3,
+  ArrowRight,
 } from 'lucide-react'
 import {
   Select,
@@ -25,9 +26,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { SectionHeader } from '@/components/ui/section-header'
-import { StatusAlert } from '@/components/ui/status-alert'
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import './App.css'
 
 type ValidationResult = {
@@ -35,7 +35,7 @@ type ValidationResult = {
   errors: string[]
 }
 
-const isCloudModel = (modelName: string) => modelName.toLowerCase().endsWith('cloud')
+const isCloudModel = (modelName: string) => modelName.toLowerCase().includes('cloud')
 
 function App() {
   const [sourceType, setSourceType] = useState<'googledocs' | 'md'>('googledocs')
@@ -52,6 +52,7 @@ function App() {
   const [viewMode, setViewMode] = useState<'code' | 'preview'>('code')
   const [timer, setTimer] = useState<number>(0)
   const [lastDuration, setLastDuration] = useState<number | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -61,7 +62,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    let interval: any
+    let interval: ReturnType<typeof setInterval> | undefined
     if (isConverting) {
       const start = Date.now()
       setTimer(0)
@@ -72,21 +73,15 @@ function App() {
     } else if (timer > 0) {
       setLastDuration(timer)
     }
-    return () => clearInterval(interval)
-  }, [isConverting])
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isConverting, timer])
 
   useEffect(() => {
-    // Always scroll the code container and the browser window to the bottom
-    // when the output or view mode changes so newly appended chunks are visible.
-    if (viewMode === 'code') {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      }
-      // also ensure the overall page scrolls to the bottom for better UX
-      // small timeout helps when DOM updates are still settling
-      setTimeout(() => {
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
-      }, 50)
+    if (viewMode === 'code' && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [output, viewMode])
 
@@ -115,7 +110,7 @@ function App() {
     if (!file) return
 
     if (!file.name.endsWith('.md')) {
-      setError('只支持 .md 格式文件')
+      setError('仅支持 .md 格式文件')
       return
     }
 
@@ -165,9 +160,10 @@ function App() {
     setError('')
 
     try {
-      const body = sourceType === 'googledocs'
-        ? { sourceType, url: googleDocsUrl, model: selectedModel }
-        : { sourceType, content: mdContent, model: selectedModel }
+      const body =
+        sourceType === 'googledocs'
+          ? { sourceType, url: googleDocsUrl, model: selectedModel }
+          : { sourceType, content: mdContent, model: selectedModel }
 
       const res = await fetch('/api/convert', {
         method: 'POST',
@@ -205,6 +201,7 @@ function App() {
                 setError(data.message)
               }
             } catch {
+              // ignore malformed chunks
             }
           }
         }
@@ -212,7 +209,6 @@ function App() {
 
       const beautiful = await beautifyCode(fullOutput)
       setOutput(beautiful)
-
     } catch (err) {
       setError(err instanceof Error ? err.message : '转换失败')
     } finally {
@@ -226,12 +222,13 @@ function App() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      setError('复制失败')
+      setError('复制失败，请手动复制')
     }
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    setIsDragging(false)
     const file = e.dataTransfer.files[0]
     if (file && fileInputRef.current) {
       const dt = new DataTransfer()
@@ -241,120 +238,130 @@ function App() {
     }
   }, [])
 
-  const modelSelector = (
-    <Select value={selectedModel} onValueChange={setSelectedModel}>
-      <SelectTrigger className="w-xs bg-transparent border-none h-12 rounded-md text-base">
-        <SelectValue placeholder="选择模型" />
-      </SelectTrigger>
-      <SelectContent>
-        {models.length > 0 ? (
-          models.map(m => (
-            <SelectItem key={m} value={m}>
-              <div className="flex items-center gap-2">
-                {isCloudModel(m) ? (
-                  <Cloud className="h-3.5 w-3.5 text-blue-400" />
-                ) : (
-                  <Monitor className="h-3.5 w-3.5 text-emerald-400" />
-                )}
-                <span className="font-mono text-base">{m}</span>
-              </div>
-            </SelectItem>
-          ))
-        ) : (
-          <SelectItem value="loading" disabled>加载中...</SelectItem>
-        )}
-      </SelectContent>
-    </Select>
-  )
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
 
-  const viewToggleButtons = (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={`rounded-md h-8 px-3 text-base font-bold transition-all ${viewMode === 'code' ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-white/5'}`}
-        onClick={() => setViewMode('code')}
-      >
-        代码
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={`rounded-md h-8 px-3 text-base font-bold transition-all ${viewMode === 'preview' ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-white/5'}`}
-        onClick={() => setViewMode('preview')}
-      >
-        预览
-      </Button>
-      <div className="w-px bg-white/10 mx-0.5" />
-      <Button
-        variant="ghost"
-        size="sm"
-        className="rounded-md h-8 px-3 text-base font-bold hover:bg-white/5 transition-all text-primary"
-        onClick={handleCopy}
-        disabled={!output}
-      >
-        {copied ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
-        {copied ? '已复制' : '复制'}
-      </Button>
-    </>
-  )
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
+
+  const canConvert = sourceType === 'googledocs' ? !!googleDocsUrl : !!mdContent
 
   return (
-    <div className="min-h-screen p-3 sm:p-4 md:p-6 lg:p-8 selection:bg-primary/30">
-      <div className="mx-auto max-w-6xl space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <header className="text-center space-y-2 pt-2 pb-4">
-          <div className="inline-block p-1.5 rounded-xl bg-[oklch(0.65_0.25_285/0.15)] mb-1 animate-glow transition-all duration-300">
-            <Sparkles className="h-8 w-8 text-[oklch(0.65_0.25_285)]" />
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-gray-50 to-white dark:from-slate-950 dark:via-gray-900 dark:to-black">
+      {/* Background decoration */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[40%] -left-[20%] w-[70%] h-[70%] rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="absolute -bottom-[40%] -right-[20%] w-[70%] h-[70%] rounded-full bg-purple-400/10 blur-3xl" />
+      </div>
+
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Simple Header - 低调标题 */}
+        <header className="mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gray-800 dark:bg-gray-700 flex items-center justify-center">
+              <Code2 className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Blog To HTML</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">本地文档转换工具</p>
+            </div>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight gradient-text-vibrant drop-shadow-[0_2px_10px_oklch(0.65_0.25_285/0.3)] animate-glow">
-            Blog To HTML
-          </h1>
-          <p className="text-muted-foreground text-base font-medium max-w-xl mx-auto opacity-80">
-            一键将 Google Docs 或 Word 文档 转换为标准的 HTML 代码
-          </p>
         </header>
 
-        <div className="grid gap-6 grid-cols-1">
-          <Card className="glass-card overflow-hidden border border-[oklch(1_0_0/0.05)]">
-            <CardHeader className="pb-4 border-b border-[oklch(1_0_0/0.05)] px-6">
-              <SectionHeader icon={FileText} title="输入源" iconVariant="blue" actions={modelSelector} />
+        {/* Main Content - Vertical Layout */}
+        <div className="flex flex-col gap-6">
+          {/* Input Panel */}
+          <Card className="glass shadow-xl border-0">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">输入源</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">选择文档来源并配置参数</p>
+                  </div>
+                </div>
+
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="w-[350px] bg-white/50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[100]">
+                    {models.length > 0 ? (
+                      models.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          <div className="flex items-center gap-2">
+                            {isCloudModel(m) ? (
+                              <Cloud className="h-4 w-4 text-blue-500" />
+                            ) : (
+                              <Monitor className="h-4 w-4 text-emerald-500" />
+                            )}
+                            <span className="font-mono text-sm">{m}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="loading" disabled>
+                        模型加载中...
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <Tabs value={sourceType} onValueChange={(v) => setSourceType(v as 'googledocs' | 'md')} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 p-1 bg-[oklch(0_0_0/0.2)] backdrop-blur-lg rounded-lg h-10">
-                  <TabsTrigger value="googledocs" className="text-base rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-                    <Globe className="h-3.5 w-3.5 mr-1.5" />
+
+            <CardContent className="space-y-6">
+              <Tabs value={sourceType} onValueChange={(v) => setSourceType(v as 'googledocs' | 'md')}>
+                <TabsList className="grid w-full grid-cols-2 bg-gray-200/80 dark:bg-gray-800/80 p-1.5 rounded-xl border border-gray-300 dark:border-gray-700">
+                  <TabsTrigger
+                    value="googledocs"
+                    className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:shadow-md data-[state=active]:text-gray-900 dark:data-[state=active]:text-white text-gray-600 dark:text-gray-400 transition-all duration-200 font-medium"
+                  >
+                    <Globe className="w-4 h-4 mr-2" />
                     Google Docs
                   </TabsTrigger>
-                  <TabsTrigger value="md" className="text-base rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-                    <FileText className="h-3.5 w-3.5 mr-1.5" />
-                    Markdown 文件
+                  <TabsTrigger
+                    value="md"
+                    className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-600 data-[state=active]:shadow-md data-[state=active]:text-gray-900 dark:data-[state=active]:text-white text-gray-600 dark:text-gray-400 transition-all duration-200 font-medium"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Markdown
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="googledocs" className="mt-4 space-y-3 animate-in slide-in-from-left-1 duration-200">
-                  <div className="space-y-2">
-                    <div className="relative group">
-                      <input
-                        type="url"
-                        placeholder="粘贴 Google Docs 链接..."
-                        value={googleDocsUrl}
-                        onChange={(e) => setGoogleDocsUrl(e.target.value)}
-                        className="w-full rounded-xl border border-[oklch(1_0_0/0.15)] bg-[oklch(1_0_0/0.06)] backdrop-blur-lg px-4 py-3 text-sm transition-all duration-300 focus:border-[oklch(0.65_0.25_285/0.5)] focus:outline-none focus:ring-2 focus:ring-[oklch(0.65_0.25_285/0.2)] focus:bg-[oklch(1_0_0/0.08)] hover:border-[oklch(1_0_0/0.2)]"
-                      />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground italic flex items-center gap-1.5 ml-1 opacity-80">
-                      <AlertCircle className="h-3 w-3" />
-                      请确保文档已设置为「任何人均可查看」
-                    </p>
+                <TabsContent value="googledocs" className="mt-6 space-y-4">
+                  <div className="relative">
+                    <input
+                      type="url"
+                      placeholder="粘贴 Google Docs 链接..."
+                      value={googleDocsUrl}
+                      onChange={(e) => setGoogleDocsUrl(e.target.value)}
+                      className="w-full px-4 py-3.5 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 rounded-xl">
+                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <p>请确保该文档权限已设置为"任何知道链接的人可查看"。</p>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="md" className="mt-4 space-y-3 animate-in slide-in-from-right-1 duration-200">
+                <TabsContent value="md" className="mt-6 space-y-4">
                   <div
-                    className="relative border border-dashed border-[oklch(1_0_0/0.15)] rounded-xl p-8 text-center transition-all duration-300 hover:border-[oklch(0.65_0.25_285/0.3)] hover:bg-[oklch(0.65_0.25_285/0.05)] cursor-pointer group bg-[oklch(1_0_0/0.03)] backdrop-blur-lg"
+                    className={cn(
+                      'relative rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer overflow-hidden',
+                      isDragging
+                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
+                        : 'border-gray-300 dark:border-white/20 hover:border-gray-400 dark:hover:border-white/30 bg-gray-50/50 dark:bg-white/5'
+                    )}
                     onDrop={handleDrop}
-                    onDragOver={(e) => e.preventDefault()}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <input
@@ -364,26 +371,36 @@ function App() {
                       onChange={handleFileUpload}
                       className="hidden"
                     />
-                    <div className="space-y-3">
-                      <div className="p-2.5 rounded-full bg-[oklch(0.65_0.25_285/0.15)] w-fit mx-auto transition-all duration-300 group-hover:scale-110 group-hover:bg-[oklch(0.65_0.25_285/0.25)]">
-                        <Download className="h-6 w-6 text-[oklch(0.65_0.25_285)] transition-colors duration-300 group-hover:text-[oklch(0.7_0.25_285)]" />
+                    <div className="px-6 py-12 text-center">
+                      <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                        <Upload className="w-6 h-6 text-white" />
                       </div>
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold">点击或拖放 .md 文件</p>
-                      </div>
+                      <p className="text-base font-medium text-gray-900 dark:text-white mb-1">
+                        点击或拖拽文件到这里
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">支持 .md 格式文件</p>
                     </div>
                   </div>
+
                   {mdFileName && (
-                    <div className="flex items-center justify-between p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
-                        <span className="font-bold text-emerald-400 text-base">{mdFileName}</span>
+                    <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 animate-scale-in">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                          {mdFileName}
+                        </span>
                       </div>
                       <button
-                        onClick={() => { setMdFileName(''); setMdContent(''); }}
-                        className="p-1 hover:text-destructive transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMdFileName('')
+                          setMdContent('')
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-colors"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   )}
@@ -392,115 +409,255 @@ function App() {
 
               <Button
                 onClick={handleConvert}
-                disabled={isConverting || (sourceType === 'googledocs' ? !googleDocsUrl : !mdContent)}
-                className="w-full h-11 text-base font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
-                size="lg"
+                disabled={isConverting || !canConvert}
+                className={cn(
+                  'w-full h-12 text-base font-semibold rounded-xl transition-all duration-300',
+                  canConvert && !isConverting
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5'
+                    : 'bg-gray-100 dark:bg-white/10 text-gray-400 cursor-not-allowed'
+                )}
               >
                 {isConverting ? (
-                  <div className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
-                    <span>转换中...</span>
-                  </div>
+                    正在转换...
+                  </>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    <span>立即转换</span>
-                  </div>
+                  <>
+                    立即转换
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
                 )}
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="glass-card overflow-hidden border border-[oklch(1_0_0/0.05)]">
-            <CardHeader className="pb-4 border-b border-[oklch(1_0_0/0.05)] px-6">
-              <SectionHeader icon={Code2} title="HTML 输出" iconVariant="cyan" actions={viewToggleButtons} />
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              {error && (
-                <StatusAlert variant="error" title="错误">
-                  {error}
-                </StatusAlert>
-              )}
+          {/* Output Panel */}
+          <Card className="glass shadow-xl border-0">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                    <Code2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">HTML 输出</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">预览或复制生成的代码</p>
+                  </div>
+                </div>
 
-              {isConverting && (
-                <StatusAlert variant="info" className="animate-in fade-in slide-in-from-top-1 duration-300">
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-1.5">
-                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-lg">
+                  <button
+                    onClick={() => setViewMode('code')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                      viewMode === 'code'
+                        ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    )}
+                  >
+                    代码
+                  </button>
+                  <button
+                    onClick={() => setViewMode('preview')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                      viewMode === 'preview'
+                        ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    )}
+                  >
+                    预览
+                  </button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {/* Status Alerts */}
+              <div className="space-y-2">
+                {error && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 animate-scale-in">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
+
+                {isConverting && (
+                  <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 animate-scale-in">
+                    <div className="flex items-center gap-3">
+                      <svg className="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24">
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
                       </svg>
-                      <span className="text-base font-black">正在生成转换中...</span>
+                      <span className="text-sm font-medium text-blue-700 dark:text-blue-300">正在生成 HTML...</span>
                     </div>
-                    <span className="font-mono text-[10px] opacity-70">
-                      {timer.toFixed(1)}s
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-500/20">
+                      <Clock3 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300">
+                        {timer.toFixed(1)}s
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {lastDuration !== null && !isConverting && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 animate-scale-in">
+                    <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      生成完成，总耗时 {lastDuration.toFixed(2)}s
                     </span>
                   </div>
-                </StatusAlert>
-              )}
-
-              {lastDuration !== null && !isConverting && (
-                <StatusAlert variant="cyan" className="animate-in fade-in duration-500">
-                  <div className="text-base font-bold text-cyan-400/70 flex items-center gap-2">
-                    <Sparkles className="h-3 w-3" />
-                    生成完毕，总计耗时 {lastDuration.toFixed(2)}s
-                  </div>
-                </StatusAlert>
-              )}
-
-              {validation && (
-                <StatusAlert variant={validation.valid ? 'success' : 'warning'}>
-                  <div className="flex items-center gap-1.5">
-                    {validation.valid ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                    <span className="text-base font-black">{validation.valid ? '验证通过' : '验证警告'}</span>
-                  </div>
-                </StatusAlert>
-              )}
-
-              <div className="relative rounded-xl border border-[oklch(1_0_0/0.15)] bg-[oklch(0_0_0/0.4)] backdrop-blur-lg overflow-hidden shadow-inner font-mono text-sm group hover:border-[oklch(0.65_0.25_285/0.2)] transition-all duration-300">
-                {viewMode === 'code' ? (
-                  <div
-                    ref={scrollRef}
-                    className="overflow-y-auto overflow-x-hidden custom-scrollbar transition-all"
-                  >
-                    <SyntaxHighlighter
-                      language="html"
-                      style={vscDarkPlus}
-                      customStyle={{
-                        margin: 0,
-                        padding: '1.25rem',
-                        fontSize: '1rem',
-                        backgroundColor: 'transparent',
-                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                        // ensure lines wrap naturally and avoid horizontal scrollbars
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        overflowWrap: 'anywhere',
-                      }}
-                      wrapLines={true}
-                      wrapLongLines={true}
-                    >
-                      {output || (isConverting ? '' : '<!-- 代码生成结果 -->')}
-                    </SyntaxHighlighter>
-                  </div>
-                ) : (
-                  <div
-                    ref={scrollRef}
-                    className="p-6 overflow-y-auto overflow-x-hidden custom-scrollbar prose prose-invert prose-sm max-w-none text-foreground bg-white/[0.01]"
-                    dangerouslySetInnerHTML={{ __html: output || '<p class="text-muted-foreground italic text-center text-base mt-20">预览区域</p>' }}
-                  />
                 )}
+
+                {validation && (
+                  <div
+                    className={cn(
+                      'flex items-start gap-3 px-4 py-3 rounded-xl border animate-scale-in',
+                      validation.valid
+                        ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
+                        : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20'
+                    )}
+                  >
+                    {validation.valid ? (
+                      <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          'text-sm font-medium',
+                          validation.valid
+                            ? 'text-emerald-700 dark:text-emerald-300'
+                            : 'text-amber-700 dark:text-amber-300'
+                        )}
+                      >
+                        {validation.valid ? 'HTML 验证通过' : 'HTML 校验提示'}
+                      </p>
+                      {!validation.valid && validation.errors.length > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                          {validation.errors[0]}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Output Area */}
+              <div className="relative rounded-xl overflow-hidden bg-[#1e1e1e] border border-gray-800">
+                {/* Toolbar */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#252526]">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500" />
+                      <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                      <div className="w-3 h-3 rounded-full bg-green-500" />
+                    </div>
+                    <span className="ml-3 text-xs text-gray-400 font-mono">
+                      {viewMode === 'code' ? 'output.html' : 'preview'}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopy}
+                    disabled={!output}
+                    className="h-8 px-3 text-gray-400 hover:text-white hover:bg-white/10"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1.5" />
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1.5" />
+                        复制
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <div className="relative">
+                  {viewMode === 'code' ? (
+                    <div ref={scrollRef} className="h-[300px] overflow-auto custom-scrollbar">
+                      <SyntaxHighlighter
+                        language="html"
+                        style={vscDarkPlus}
+                        customStyle={{
+                          margin: 0,
+                          padding: '1.5rem',
+                          fontSize: '13px',
+                          backgroundColor: 'transparent',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                        wrapLines
+                        wrapLongLines
+                      >
+                        {output || '<!-- 等待转换... -->'}
+                      </SyntaxHighlighter>
+                    </div>
+                  ) : (
+                    <div
+                      ref={scrollRef}
+                      className="h-[300px] overflow-auto custom-scrollbar p-6 bg-white dark:bg-[#1e1e1e]"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          output ||
+                          '<p class="text-gray-400 text-center mt-20 italic text-sm">预览区域</p>',
+                      }}
+                    />
+                  )}
+
+                  {/* Empty state overlay */}
+                  {!output && !isConverting && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1e1e1e]/95">
+                      <div className="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
+                        <Code2 className="w-8 h-8 text-gray-600" />
+                      </div>
+                      <p className="text-gray-400 text-sm">转换后的 HTML 代码将显示在这里</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <footer className="pt-6 pb-10 border-t border-[oklch(1_0_0/0.05)] mt-8 text-center">
-          <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-            Semantic HTML • Precise Transformation • Cloud Ready
+        {/* Footer */}
+        <footer className="mt-8 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Blog To HTML · 本地文档转换工具
           </p>
         </footer>
       </div>

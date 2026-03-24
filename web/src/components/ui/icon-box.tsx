@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+﻿import type { LucideIcon } from 'lucide-react'
 
 interface IconBoxProps {
   icon: LucideIcon
@@ -11,17 +11,17 @@ export function IconBox({ icon: Icon, variant = 'blue', size = 'md', className =
   const sizeClasses = {
     sm: 'h-4 w-4',
     md: 'h-5 w-5',
-    lg: 'h-6 w-6'
+    lg: 'h-6 w-6',
   }
 
   const variantClasses = {
-    blue: 'bg-[oklch(0.65_0.25_285/0.2)] text-[oklch(0.65_0.25_285)]',
-    cyan: 'bg-[oklch(0.75_0.25_200/0.2)] text-[oklch(0.75_0.25_200)]',
-    primary: 'bg-[oklch(0.65_0.25_285/0.1)] text-[oklch(0.65_0.25_285)]'
+    blue: 'border border-[oklch(0.62_0.12_246/0.3)] bg-[oklch(0.62_0.12_246/0.1)] text-[oklch(0.55_0.12_246)]',
+    cyan: 'border border-[oklch(0.74_0.11_188/0.34)] bg-[oklch(0.74_0.11_188/0.12)] text-[oklch(0.64_0.1_188)]',
+    primary: 'border border-primary/35 bg-primary/10 text-primary',
   }
 
   return (
-    <div className={`p-1.5 rounded-lg transition-all duration-300 hover:scale-110 hover:shadow-lg ${variantClasses[variant]} ${className}`}>
+    <div className={`flex items-center justify-center rounded-xl p-2 transition-colors ${variantClasses[variant]} ${className}`}>
       <Icon className={sizeClasses[size]} />
     </div>
   )

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+﻿import type { ReactNode } from 'react'
 import { Alert, AlertDescription, AlertTitle } from './alert'
 
 interface StatusAlertProps {
@@ -19,9 +19,9 @@ export function StatusAlert({ variant, title, children, className = '' }: Status
 
   return (
     <Alert className={`status-alert ${variantClasses[variant]} ${className}`}>
-      <div className="flex flex-col gap-1 w-full">
-        {title && <AlertTitle className="text-base font-black">{title}</AlertTitle>}
-        <AlertDescription className="text-base opacity-90">{children}</AlertDescription>
+      <div className="flex w-full flex-col gap-1">
+        {title && <AlertTitle className="text-sm font-bold tracking-tight">{title}</AlertTitle>}
+        <AlertDescription className="text-sm opacity-90">{children}</AlertDescription>
       </div>
     </Alert>
   )

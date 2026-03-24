@@ -1,4 +1,4 @@
-import * as React from "react"
+﻿import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -7,15 +7,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-[oklch(1_0_0/0.08)] backdrop-blur-2xl " +
-        "border border-[oklch(1_0_0/0.12)] " +
-        "shadow-xl shadow-[oklch(0_0_0/0.1)] " +
-        "hover:shadow-2xl hover:shadow-[oklch(0.65_0.25_285/0.1)] " +
-        "transition-all duration-500 hover:scale-[1.02] " +
-        "relative overflow-hidden " +
-        "before:absolute before:inset-0 before:bg-gradient-to-br " +
-        "before:from-[oklch(0.65_0.25_285/0.05)] before:to-transparent " +
-        "before:pointer-events-none text-card-foreground flex flex-col gap-6 rounded-xl py-6",
+        "text-card-foreground surface-outline flex flex-col gap-6 rounded-3xl py-6 shadow-[var(--shadow-panel)]",
         className
       )}
       {...props}
@@ -28,7 +20,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-5",
         className
       )}
       {...props}
