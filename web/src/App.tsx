@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+﻿import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -56,6 +56,7 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const convertStartRef = useRef<number | null>(null)
 
   useEffect(() => {
     fetchModels()
@@ -63,21 +64,29 @@ function App() {
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined
+
     if (isConverting) {
-      const start = Date.now()
-      setTimer(0)
+      convertStartRef.current = performance.now()
+      setTimer(0.1)
       setLastDuration(null)
+
       interval = setInterval(() => {
-        setTimer((Date.now() - start) / 1000)
+        if (convertStartRef.current === null) return
+        const elapsed = (performance.now() - convertStartRef.current) / 1000
+        setTimer(elapsed)
       }, 100)
-    } else if (timer > 0) {
-      setLastDuration(timer)
+    } else if (convertStartRef.current !== null) {
+      const elapsed = (performance.now() - convertStartRef.current) / 1000
+      const safeElapsed = Math.max(elapsed, 0.01)
+      setTimer(safeElapsed)
+      setLastDuration(safeElapsed)
+      convertStartRef.current = null
     }
 
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isConverting, timer])
+  }, [isConverting])
 
   useEffect(() => {
     if (viewMode === 'code' && scrollRef.current) {
@@ -252,14 +261,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-gray-50 to-white dark:from-slate-950 dark:via-gray-900 dark:to-black">
-      {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[40%] -left-[20%] w-[70%] h-[70%] rounded-full bg-blue-400/10 blur-3xl" />
         <div className="absolute -bottom-[40%] -right-[20%] w-[70%] h-[70%] rounded-full bg-purple-400/10 blur-3xl" />
       </div>
 
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Simple Header - 低调标题 */}
         <header className="mb-8">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gray-800 dark:bg-gray-700 flex items-center justify-center">
@@ -272,9 +279,7 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content - Vertical Layout */}
         <div className="flex flex-col gap-6">
-          {/* Input Panel */}
           <Card className="glass shadow-xl border-0">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -347,7 +352,7 @@ function App() {
                   </div>
                   <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 rounded-xl">
                     <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <p>请确保该文档权限已设置为"任何知道链接的人可查看"。</p>
+                    <p>请确保该文档权限已设置为“任何知道链接的人可查看”。</p>
                   </div>
                 </TabsContent>
 
@@ -375,9 +380,7 @@ function App() {
                       <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
                         <Upload className="w-6 h-6 text-white" />
                       </div>
-                      <p className="text-base font-medium text-gray-900 dark:text-white mb-1">
-                        点击或拖拽文件到这里
-                      </p>
+                      <p className="text-base font-medium text-gray-900 dark:text-white mb-1">点击或拖拽文件到这里</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">支持 .md 格式文件</p>
                     </div>
                   </div>
@@ -388,9 +391,7 @@ function App() {
                         <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
                           <Check className="w-4 h-4 text-white" />
                         </div>
-                        <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
-                          {mdFileName}
-                        </span>
+                        <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">{mdFileName}</span>
                       </div>
                       <button
                         onClick={(e) => {
@@ -447,7 +448,6 @@ function App() {
             </CardContent>
           </Card>
 
-          {/* Output Panel */}
           <Card className="glass shadow-xl border-0">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
@@ -489,7 +489,6 @@ function App() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              {/* Status Alerts */}
               <div className="space-y-2">
                 {error && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 animate-scale-in">
@@ -522,7 +521,7 @@ function App() {
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-500/20">
                       <Clock3 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300">
-                        {timer.toFixed(1)}s
+                        {Math.max(timer, 0.1).toFixed(1)}s
                       </span>
                     </div>
                   </div>
@@ -531,50 +530,34 @@ function App() {
                 {lastDuration !== null && !isConverting && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 animate-scale-in">
                     <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                      生成完成，总耗时 {lastDuration.toFixed(2)}s
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                        生成完成，总耗时 {lastDuration.toFixed(2)}s
+                      </span>
+                      {validation?.valid && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          <Check className="w-3.5 h-3.5" />
+                          HTML 验证通过
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {validation && (
-                  <div
-                    className={cn(
-                      'flex items-start gap-3 px-4 py-3 rounded-xl border animate-scale-in',
-                      validation.valid
-                        ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
-                        : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20'
-                    )}
-                  >
-                    {validation.valid ? (
-                      <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                    )}
+                {validation && !validation.valid && (
+                  <div className="flex items-start gap-3 px-4 py-3 rounded-xl border animate-scale-in bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p
-                        className={cn(
-                          'text-sm font-medium',
-                          validation.valid
-                            ? 'text-emerald-700 dark:text-emerald-300'
-                            : 'text-amber-700 dark:text-amber-300'
-                        )}
-                      >
-                        {validation.valid ? 'HTML 验证通过' : 'HTML 校验提示'}
-                      </p>
-                      {!validation.valid && validation.errors.length > 0 && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                          {validation.errors[0]}
-                        </p>
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">HTML 校验提示</p>
+                      {validation.errors.length > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{validation.errors[0]}</p>
                       )}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Output Area */}
               <div className="relative rounded-xl overflow-hidden bg-[#1e1e1e] border border-gray-800">
-                {/* Toolbar */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#252526]">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1.5">
@@ -582,9 +565,7 @@ function App() {
                       <div className="w-3 h-3 rounded-full bg-yellow-500" />
                       <div className="w-3 h-3 rounded-full bg-green-500" />
                     </div>
-                    <span className="ml-3 text-xs text-gray-400 font-mono">
-                      {viewMode === 'code' ? 'output.html' : 'preview'}
-                    </span>
+                    <span className="ml-3 text-xs text-gray-400 font-mono">{viewMode === 'code' ? 'output.html' : 'preview'}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -607,7 +588,6 @@ function App() {
                   </Button>
                 </div>
 
-                {/* Content */}
                 <div className="relative">
                   {viewMode === 'code' ? (
                     <div ref={scrollRef} className="h-[300px] overflow-auto custom-scrollbar">
@@ -632,14 +612,11 @@ function App() {
                       ref={scrollRef}
                       className="h-[300px] overflow-auto custom-scrollbar p-6 bg-white dark:bg-[#1e1e1e]"
                       dangerouslySetInnerHTML={{
-                        __html:
-                          output ||
-                          '<p class="text-gray-400 text-center mt-20 italic text-sm">预览区域</p>',
+                        __html: output || '<p class="text-gray-400 text-center mt-20 italic text-sm">预览区域</p>',
                       }}
                     />
                   )}
 
-                  {/* Empty state overlay */}
                   {!output && !isConverting && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1e1e1e]/95">
                       <div className="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
@@ -654,11 +631,8 @@ function App() {
           </Card>
         </div>
 
-        {/* Footer */}
         <footer className="mt-8 text-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Blog To HTML · 本地文档转换工具
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Blog To HTML · 本地文档转换工具</p>
         </footer>
       </div>
     </div>
