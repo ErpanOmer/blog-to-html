@@ -7,8 +7,8 @@
     "build": "cd web && npm install && npm run build",
     "pstart": "npm run build",
     "start": "node --env-file=.env server.js",
-    "start:remote": "set OLLAMA_HOST=https://ollama.com&& npm start",
-    "start:local": "set OLLAMA_HOST=http://localhost:11434&& npm start",
+    "start:remote": "cross-env OLLAMA_HOST=https://ollama.com npm start",
+    "start:local": "cross-env OLLAMA_HOST=http://localhost:11434 npm start",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" --names \"Backend,Frontend\" --prefix-colors \"blue,green\"",
     "dev:backend": "nodemon",
     "dev:frontend": "cd web && npm run dev"
@@ -19,13 +19,12 @@
   "description": "",
   "dependencies": {
     "express": "^4.21.2",
-    "mammoth": "^1.9.0",
     "multer": "^1.4.5-lts.1",
-    "node-fetch": "^3.3.2",
     "ollama": "^0.6.3"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "nodemon": "^3.1.11"
   }
 }

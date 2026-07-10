@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback, useEffect } from 'react'
+﻿﻿﻿﻿import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -19,6 +19,8 @@ import {
   AlertCircle,
   Clock3,
   ArrowRight,
+  Square,
+  RefreshCw,
 } from 'lucide-react'
 import {
   Select,
@@ -27,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import './App.css'
 
@@ -43,6 +46,7 @@ function App() {
   const [mdContent, setMdContent] = useState('')
   const [mdFileName, setMdFileName] = useState('')
   const [models, setModels] = useState<string[]>([])
+  const [modelsError, setModelsError] = useState('')
   const [selectedModel, setSelectedModel] = useState('')
   const [output, setOutput] = useState('')
   const [isConverting, setIsConverting] = useState(false)
@@ -57,9 +61,17 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const convertStartRef = useRef<number | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     fetchModels()
+  }, [])
+
+  // Abort in-flight conversion on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
   }, [])
 
   useEffect(() => {
@@ -95,8 +107,12 @@ function App() {
   }, [output, viewMode])
 
   const fetchModels = async () => {
+    setModelsError('')
     try {
       const res = await fetch('/api/models')
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
       const data = await res.json()
       if (data.models && data.models.length > 0) {
         const sortedModels = [...data.models].sort((a, b) => {
@@ -108,9 +124,12 @@ function App() {
         })
         setModels(sortedModels)
         setSelectedModel(sortedModels[0])
+      } else {
+        setModelsError('后端未返回可用模型')
       }
     } catch (err) {
       console.error('Failed to fetch models:', err)
+      setModelsError('模型加载失败，请检查后端服务')
     }
   }
 
@@ -163,10 +182,19 @@ function App() {
   }
 
   const handleConvert = useCallback(async () => {
+    // If already converting, this click means "cancel"
+    if (isConverting) {
+      abortRef.current?.abort()
+      return
+    }
+
     setIsConverting(true)
     setOutput('')
     setValidation(null)
     setError('')
+
+    const controller = new AbortController()
+    abortRef.current = controller
 
     try {
       const body =
@@ -178,7 +206,14 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal,
       })
+
+      // Non-2xx: server returned a normal JSON error (not SSE)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `请求失败 (${res.status})`)
+      }
 
       if (!res.body) {
         throw new Error('流式响应不可用')
@@ -219,11 +254,17 @@ function App() {
       const beautiful = await beautifyCode(fullOutput)
       setOutput(beautiful)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '转换失败')
+      // User-initiated cancel: don't show error
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // no-op
+      } else {
+        setError(err instanceof Error ? err.message : '转换失败')
+      }
     } finally {
+      abortRef.current = null
       setIsConverting(false)
     }
-  }, [sourceType, googleDocsUrl, mdContent, selectedModel])
+  }, [isConverting, sourceType, googleDocsUrl, mdContent, selectedModel])
 
   const handleCopy = async () => {
     try {
@@ -293,36 +334,49 @@ function App() {
                   </div>
                 </div>
 
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger className="w-[350px] bg-white/50 dark:bg-white/5 border-gray-200 dark:border-white/10">
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[100]">
-                    {models.length > 0 ? (
-                      models.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          <div className="flex items-center gap-2">
-                            {isCloudModel(m) ? (
-                              <Cloud className="h-4 w-4 text-blue-500" />
-                            ) : (
-                              <Monitor className="h-4 w-4 text-emerald-500" />
-                            )}
-                            <span className="font-mono text-sm">{m}</span>
-                          </div>
+                {modelsError && models.length === 0 ? (
+                  <div className="flex items-center gap-2 px-3 h-11 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                    <span className="text-sm text-red-600 dark:text-red-400 truncate max-w-[220px]">{modelsError}</span>
+                    <button
+                      onClick={fetchModels}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      重试
+                    </button>
+                  </div>
+                ) : (
+                  <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <SelectTrigger className="w-[350px] bg-white/50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                      <SelectValue placeholder="选择模型" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[100]">
+                      {models.length > 0 ? (
+                        models.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            <div className="flex items-center gap-2">
+                              {isCloudModel(m) ? (
+                                <Cloud className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <Monitor className="h-4 w-4 text-emerald-500" />
+                              )}
+                              <span className="font-mono text-sm">{m}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="loading" disabled>
+                          模型加载中...
                         </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="loading" disabled>
-                        模型加载中...
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </CardHeader>
 
             <CardContent className="space-y-6">
-              <Tabs value={sourceType} onValueChange={(v) => setSourceType(v as 'googledocs' | 'md')}>
+              <Tabs value={sourceType} onValueChange={(v) => { setSourceType(v as 'googledocs' | 'md'); setError('') }}>
                 <TabsList className="grid w-full grid-cols-2 bg-gray-200/80 dark:bg-gray-800/80 p-1.5 rounded-xl border border-gray-300 dark:border-gray-700">
                   <TabsTrigger
                     value="googledocs"
@@ -346,7 +400,7 @@ function App() {
                       type="url"
                       placeholder="粘贴 Google Docs 链接..."
                       value={googleDocsUrl}
-                      onChange={(e) => setGoogleDocsUrl(e.target.value)}
+                      onChange={(e) => { setGoogleDocsUrl(e.target.value); setError('') }}
                       className="w-full px-4 py-3.5 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-gray-900 dark:text-white placeholder:text-gray-400"
                     />
                   </div>
@@ -410,33 +464,20 @@ function App() {
 
               <Button
                 onClick={handleConvert}
-                disabled={isConverting || !canConvert}
+                disabled={!isConverting && !canConvert}
                 className={cn(
                   'w-full h-12 text-base font-semibold rounded-xl transition-all duration-300',
-                  canConvert && !isConverting
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5'
-                    : 'bg-gray-100 dark:bg-white/10 text-gray-400 cursor-not-allowed'
+                  isConverting
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25 hover:-translate-y-0.5'
+                    : canConvert
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5'
+                      : 'bg-gray-100 dark:bg-white/10 text-gray-400 cursor-not-allowed'
                 )}
               >
                 {isConverting ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    正在转换...
+                    <Square className="w-4 h-4 mr-2 fill-current" />
+                    取消转换
                   </>
                 ) : (
                   <>
@@ -612,7 +653,9 @@ function App() {
                       ref={scrollRef}
                       className="h-[300px] overflow-auto custom-scrollbar p-6 bg-white dark:bg-[#1e1e1e]"
                       dangerouslySetInnerHTML={{
-                        __html: output || '<p class="text-gray-400 text-center mt-20 italic text-sm">预览区域</p>',
+                        __html: output
+                          ? DOMPurify.sanitize(output, { USE_PROFILES: { html: true } })
+                          : '<p class="text-gray-400 text-center mt-20 italic text-sm">预览区域</p>',
                       }}
                     />
                   )}

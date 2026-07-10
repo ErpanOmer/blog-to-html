@@ -22,7 +22,6 @@ Blog To HTML 是一个基于 AI 的文档转换工具，能够智能地将 Googl
 - **Node.js** + **Express**: 服务器框架
 - **Ollama**: AI 模型集成
 - **Multer**: 文件上传处理
-- **Mammoth**: 文档内容提取
 
 ### 前端
 - **React 19**: UI 框架
@@ -157,7 +156,7 @@ blog-to-html/
 ├── DEVELOPMENT.md         # 开发环境文档
 ├── README.md              # 项目说明文档
 ├── run-local.js           # 本地运行脚本
-├── run-cloude.js          # 云端运行脚本
+├── run-cloud.js           # 云端运行脚本
 ├── web/                   # 前端应用目录
 │   ├── src/
 │   │   ├── components/    # React 组件
