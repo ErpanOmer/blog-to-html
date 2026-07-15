@@ -1,6 +1,7 @@
 {
   "watch": [
     "server.js",
+    "server/**/*.js",
     "prompt.txt"
   ],
   "ext": "js,txt",
@@ -10,7 +11,7 @@
     "dist/",
     ".git/"
   ],
-  "exec": "node --env-file=.env server.js",
+  "exec": "node server.js",
   "env": {
     "NODE_ENV": "development"
   },

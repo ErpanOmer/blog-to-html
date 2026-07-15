@@ -1,259 +1,233 @@
 import express from 'express'
-import { Ollama } from 'ollama'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import multer from 'multer'
+import {
+  PublicError,
+  conversionRequestSchema,
+  discoverModels,
+  discoveryRequestSchema,
+  formatValidationError,
+  normalizeProviderError,
+  streamConversion,
+  testProvider,
+  testRequestSchema,
+} from './server/llm.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const promptPath = path.join(__dirname, 'prompt.txt')
 
-const app = express()
-const PORT = process.env.PORT || 3000
-const isDevelopment = process.env.NODE_ENV === 'development'
-
-// Middleware
-app.use(express.json({ limit: '5mb' }))
-
-// Only serve static files in production mode
-// In development, frontend runs on port 5173 with Vite dev server
-if (!isDevelopment) {
-  app.use(express.static(path.join(__dirname, 'web/dist')))
-}
-
-// Multer configuration for file uploads
-const storage = multer.memoryStorage()
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'text/markdown' ||
-      file.mimetype === 'text/x-markdown' ||
-      file.originalname.endsWith('.md')) {
-      cb(null, true)
-    } else {
-      cb(new Error('Only .md files are allowed'))
-    }
-  }
-})
-
-// Load system prompt (fail fast if missing)
-if (!fs.existsSync('./prompt.txt')) {
+if (!fs.existsSync(promptPath)) {
   console.error('❌ prompt.txt 不存在，无法启动')
   process.exit(1)
 }
-const SYSTEM_PROMPT = fs.readFileSync('./prompt.txt', 'utf8')
 
-// Warn if using cloud Ollama without API key
-const ollamaHost = process.env.OLLAMA_HOST || 'https://ollama.com'
-if (ollamaHost.includes('ollama.com') && !process.env.OLLAMA_API_KEY) {
-  console.warn('⚠️ 使用云端 Ollama 但未设置 OLLAMA_API_KEY，请求可能返回 401')
-}
+const SYSTEM_PROMPT = fs.readFileSync(promptPath, 'utf8')
 
-// Initialize Ollama client
-const ollama = new Ollama({
-  host: ollamaHost,
-  headers: {
-    Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`,
+const storage = multer.memoryStorage()
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype === 'text/markdown' ||
+      file.mimetype === 'text/x-markdown' ||
+      file.originalname.toLowerCase().endsWith('.md')
+    ) {
+      cb(null, true)
+    } else {
+      cb(new Error('仅支持 .md 文件'))
+    }
   },
 })
 
-const DEFAULT_MODEL = 'qwen3-coder:480b-cloud'
-
-// Validation function to check HTML output
 function validateHtmlOutput(html) {
   const errors = []
-
-  // Check for forbidden tags
-  if (/<html[\s>]/i.test(html)) errors.push('Contains forbidden <html> tag')
-  if (/<head[\s>]/i.test(html)) errors.push('Contains forbidden <head> tag')
-  if (/<body[\s>]/i.test(html)) errors.push('Contains forbidden <body> tag')
-  if (/```/.test(html)) errors.push('Contains code fence markers (```)')
-
-  // Check for proper structure
-  if (!/<section/i.test(html)) errors.push('Missing <section> tags for content blocks')
-  if (!/<h2/i.test(html) && !/<h3/i.test(html)) errors.push('Missing heading tags (h2/h3)')
-
-  return {
-    valid: errors.length === 0,
-    errors
-  }
+  if (/<html[\s>]/i.test(html)) errors.push('包含不允许的 <html> 标签')
+  if (/<head[\s>]/i.test(html)) errors.push('包含不允许的 <head> 标签')
+  if (/<body[\s>]/i.test(html)) errors.push('包含不允许的 <body> 标签')
+  if (/```/.test(html)) errors.push('包含代码围栏标记（```）')
+  if (!/<section/i.test(html)) errors.push('缺少用于内容区块的 <section> 标签')
+  if (!/<h2/i.test(html) && !/<h3/i.test(html)) errors.push('缺少 h2/h3 标题标签')
+  return { valid: errors.length === 0, errors }
 }
 
-// Extract text content from Google Docs
 async function fetchGoogleDocsContent(url) {
-  // Convert Google Docs URL to export URL
   const docIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
-  if (!docIdMatch) {
-    throw new Error('Invalid Google Docs URL')
-  }
+  if (!docIdMatch) throw new PublicError(400, 'invalid_google_docs_url', 'Google Docs URL 无效')
 
-  const docId = docIdMatch[1]
-  const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=md`
-
+  const exportUrl = `https://docs.google.com/document/d/${docIdMatch[1]}/export?format=md`
   let response
   try {
-    response = await fetch(exportUrl, { signal: AbortSignal.timeout(15000) })
-  } catch (err) {
-    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-      throw new Error('访问 Google Docs 超时，请检查网络连接')
+    response = await fetch(exportUrl, { signal: AbortSignal.timeout(15_000) })
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      throw new PublicError(504, 'google_docs_timeout', '访问 Google Docs 超时，请检查网络连接')
     }
-    throw new Error('无法访问 Google Docs：' + (err.message || '网络错误'))
+    throw new PublicError(502, 'google_docs_unavailable', '无法访问 Google Docs，请检查网络连接')
   }
 
   if (!response.ok) {
-    throw new Error('无法访问 Google Docs，请确认文档已设为「任何知道链接的人可查看」')
+    throw new PublicError(400, 'google_docs_unavailable', '无法访问 Google Docs，请确认文档已设为“知道链接的任何人可查看”')
   }
 
-  // 校验 Content-Type，避免把登录页 HTML 当作 markdown
   const contentType = response.headers.get('content-type') || ''
   const text = await response.text()
-
-  // Google 导出 md 时 Content-Type 可能是 text/markdown 或 text/plain；
-  // 若返回 text/html 且内容像登录页，说明文档未公开
   if (contentType.includes('text/html') && /<form[^>]*login|accounts\.google\.com\/ServiceLogin/i.test(text)) {
-    throw new Error('该 Google Docs 需要登录访问，请将文档权限设为「任何知道链接的人可查看」')
+    throw new PublicError(400, 'google_docs_private', '该 Google Docs 需要登录，请将权限设为“知道链接的任何人可查看”')
   }
-
   return text
 }
 
-// Extract content from Markdown file upload
-function readMarkdownContent(buffer) {
-  return buffer.toString('utf8')
+function sendSse(res, data) {
+  res.write(`data: ${JSON.stringify(data)}\n\n`)
 }
 
-// Models endpoint
-app.get('/api/models', async (req, res) => {
-  try {
-    const response = await ollama.list()
-
-    // Remote might return models in a different format or might not have list()
-    // Local Ollama returns { models: [{ name, ... }, ...] }
-    const modelList = response.models?.map(m => m.name) || []
-    res.json({ models: modelList, response })
-  } catch (error) {
-    console.error('Fetch models error:', error)
-    // If list() fails (e.g. on some remote hosts), return a default list or empty
-    res.json({ models: [DEFAULT_MODEL] })
+function parseOrThrow(schema, value) {
+  const result = schema.safeParse(value)
+  if (!result.success) {
+    throw new PublicError(400, 'invalid_request', formatValidationError(result.error) || '请求参数无效')
   }
-})
+  return result.data
+}
 
-// SSE endpoint for streaming conversion
-app.post('/api/convert', async (req, res) => {
-  try {
-    const { content, sourceType, url, model } = req.body
+function sendPublicError(res, error) {
+  const publicError = error instanceof PublicError
+    ? error
+    : new PublicError(500, 'internal_error', '服务器内部错误')
+  return res.status(publicError.status).json({ error: publicError.message, code: publicError.code })
+}
 
-    let inputContent = content
+export function createApp({ isDevelopment = process.env.NODE_ENV === 'development' } = {}) {
+  const app = express()
+  app.use(express.json({ limit: '5mb' }))
 
-    // If Google Docs URL provided, fetch content
-    if (sourceType === 'googledocs' && url) {
-      inputContent = await fetchGoogleDocsContent(url)
+  if (!isDevelopment) app.use(express.static(path.join(__dirname, 'web/dist')))
+
+  app.post('/api/models/discover', async (req, res) => {
+    try {
+      const { provider } = parseOrThrow(discoveryRequestSchema, req.body)
+      const models = await discoverModels(provider)
+      res.json({ models })
+    } catch (error) {
+      const publicError = error instanceof PublicError ? error : normalizeProviderError(error, req.body?.provider)
+      console.error('Model discovery failed:', publicError.code)
+      sendPublicError(res, publicError)
     }
+  })
 
-    if (!inputContent || inputContent.trim().length === 0) {
-      return res.status(400).json({ error: 'No content provided' })
+  app.post('/api/providers/test', async (req, res) => {
+    const controller = new AbortController()
+    req.on('aborted', () => controller.abort())
+    try {
+      const { provider, model } = parseOrThrow(testRequestSchema, req.body)
+      await testProvider(provider, model, { signal: controller.signal })
+      res.json({ ok: true })
+    } catch (error) {
+      const publicError = error instanceof PublicError ? error : normalizeProviderError(error, req.body?.provider)
+      console.error('Provider test failed:', publicError.code)
+      sendPublicError(res, publicError)
     }
+  })
 
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no')
+  app.post('/api/convert', async (req, res) => {
+    let request
+    try {
+      request = parseOrThrow(conversionRequestSchema, req.body)
+      let inputContent = request.content
+      if (request.sourceType === 'googledocs') {
+        if (!request.url?.trim()) throw new PublicError(400, 'missing_url', '请提供 Google Docs URL')
+        inputContent = await fetchGoogleDocsContent(request.url)
+      }
+      if (!inputContent?.trim()) throw new PublicError(400, 'missing_content', '请提供要转换的文档内容')
 
-    let fullOutput = ''
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-cache, no-transform')
+      res.setHeader('Connection', 'keep-alive')
+      res.setHeader('X-Accel-Buffering', 'no')
+      res.flushHeaders()
 
-    // Stream response from Ollama
-    const response = await ollama.chat({
-      model: model || DEFAULT_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: inputContent },
-      ],
-      stream: true,
-    })
+      const controller = new AbortController()
+      const abortUpstream = () => {
+        if (!res.writableEnded) controller.abort()
+      }
+      req.on('aborted', abortUpstream)
+      res.on('close', abortUpstream)
 
-    for await (const part of response) {
-      const chunk = part?.message?.content ?? ''
-      fullOutput += chunk
-
-      // Send chunk to client
-      res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
+      let fullOutput = ''
+      try {
+        const result = streamConversion(
+          request.provider,
+          request.model,
+          SYSTEM_PROMPT,
+          inputContent,
+          { signal: controller.signal },
+        )
+        for await (const chunk of result.textStream) {
+          fullOutput += chunk
+          sendSse(res, { type: 'chunk', content: chunk })
+        }
+        sendSse(res, { type: 'validation', ...validateHtmlOutput(fullOutput) })
+        sendSse(res, { type: 'done' })
+        res.end()
+      } catch (error) {
+        if (!res.writableEnded && !controller.signal.aborted) {
+          const publicError = normalizeProviderError(error, request.provider)
+          console.error('Conversion failed:', publicError.code)
+          sendSse(res, { type: 'error', message: publicError.message, code: publicError.code })
+          res.end()
+        }
+      } finally {
+        req.off('aborted', abortUpstream)
+        res.off('close', abortUpstream)
+      }
+    } catch (error) {
+      const publicError = error instanceof PublicError
+        ? error
+        : normalizeProviderError(error, request?.provider || req.body?.provider)
+      console.error('Conversion setup failed:', publicError.code)
+      if (!res.headersSent) sendPublicError(res, publicError)
     }
+  })
 
-    // Validate output
-    const validation = validateHtmlOutput(fullOutput)
-    res.write(`data: ${JSON.stringify({ type: 'validation', ...validation })}\n\n`)
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
-    res.end()
+  app.post('/api/upload', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: '未上传文件' })
+    res.json({ content: req.file.buffer.toString('utf8') })
+  })
 
-  } catch (error) {
-    console.error('Conversion error:', error)
-    res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`)
-    res.end()
+  if (!isDevelopment) {
+    app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'web/dist/index.html')))
   }
-})
 
-// File upload endpoint
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' })
+  app.use((error, _req, res, _next) => {
+    console.error('Unhandled request error:', error?.name || 'Error')
+    if (error instanceof multer.MulterError) {
+      const message = error.code === 'LIMIT_FILE_SIZE' ? '文件过大，最大支持 10MB' : error.message
+      return res.status(400).json({ error: message })
     }
+    if (error?.message === '仅支持 .md 文件') return res.status(400).json({ error: error.message })
+    if (error?.type === 'entity.too.large' || error?.status === 413) {
+      return res.status(413).json({ error: '请求体过大，最大支持 5MB' })
+    }
+    if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: '请求体 JSON 格式错误' })
+    return res.status(500).json({ error: '服务器内部错误' })
+  })
 
-    const content = readMarkdownContent(req.file.buffer)
-    res.json({ content })
+  return app
+}
 
-  } catch (error) {
-    console.error('Upload error:', error)
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// Serve React app for any other routes (production only)
-if (!isDevelopment) {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'web/dist/index.html'))
+export function startServer() {
+  const port = process.env.PORT || 3000
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  return createApp({ isDevelopment }).listen(port, () => {
+    console.log(`🚀 Server running at http://localhost:${port}`)
+    if (isDevelopment) {
+      console.log('📑 Frontend development server: http://localhost:5173')
+      console.log(`🔗 API: http://localhost:${port}/api`)
+    }
   })
 }
 
-// Global error-handling middleware (must be last, after all routes)
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err)
-
-  // Multer errors (file size, unexpected field, etc.)
-  if (err instanceof multer.MulterError) {
-    let msg = err.message
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      msg = '文件过大，最大支持 10MB'
-    }
-    return res.status(400).json({ error: msg })
-  }
-
-  // fileFilter rejection (non-.md files)
-  if (err?.message?.includes('Only .md files')) {
-    return res.status(400).json({ error: err.message })
-  }
-
-  // JSON body too large
-  if (err?.type === 'entity.too.large' || err?.status === 413) {
-    return res.status(413).json({ error: '请求体过大，最大支持 5MB' })
-  }
-
-  // JSON parse errors
-  if (err?.type === 'entity.parse.failed') {
-    return res.status(400).json({ error: '请求体格式错误' })
-  }
-
-  res.status(500).json({ error: err?.message || '服务器内部错误' })
-})
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`)
-  if (isDevelopment) {
-    console.log(`📝 Development mode: Frontend runs on http://localhost:5173`)
-    console.log(`🔗 API available at http://localhost:${PORT}/api`)
-  } else {
-    console.log(`🌐 Production mode: Serving static files from web/dist`)
-  }
-})
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) startServer()

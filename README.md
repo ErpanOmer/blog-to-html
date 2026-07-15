@@ -1,304 +1,202 @@
 # Blog To HTML
 
-一键将 Google Docs 或 Markdown 文档转换为标准的 HTML 代码。
+将 Google Docs 或 Markdown 文档交给任意 OpenAI-compatible / Anthropic-compatible 文本模型，实时转换为语义化 HTML。
 
-## 项目概述
+## 功能
 
-Blog To HTML 是一个基于 AI 的文档转换工具，能够智能地将 Google Docs 在线文档或本地 Markdown 文件转换为语义化的 HTML 代码。项目使用 Ollama AI 模型进行智能转换，支持云端和本地模型，提供实时流式输出和代码预览功能。
-
-### 核心特性
-
-- 🚀 **智能转换**: 基于 AI 模型的智能 Markdown 到 HTML 转换
-- 🌐 **多源支持**: 支持 Google Docs URL 和本地 Markdown 文件
-- ⚡ **实时流式输出**: 转换过程中实时显示生成结果
-- 🎨 **代码预览**: 支持代码视图和预览视图切换
-- ✅ **HTML 验证**: 自动验证生成的 HTML 代码质量
-- ☁️ **云端/本地**: 支持云端 Ollama API 和本地 Ollama 服务
-- 📋 **一键复制**: 快速复制生成的 HTML 代码
+- Google Docs 链接与本地 Markdown 文件输入
+- OpenAI Chat Completions-compatible 与 Anthropic Messages-compatible 两种 API 格式
+- DeepSeek、OpenAI、Anthropic、Ollama 和自定义服务模板
+- 多个模型配置档案，可在页面中快速切换配置与模型
+- 自动发现模型，并支持手动添加不提供 `/models` 接口的模型
+- SSE 实时流式输出、取消请求、HTML 校验、代码格式化与预览
+- API Key 和配置仅保存在当前浏览器，不写入服务端
 
 ## 技术栈
 
-### 后端
-- **Node.js** + **Express**: 服务器框架
-- **Ollama**: AI 模型集成
-- **Multer**: 文件上传处理
+- 后端：Node.js、Express、Vercel AI SDK、Multer、Zod
+- 前端：React 19、TypeScript、Vite、Tailwind CSS、Radix UI
+- 测试：Node Test Runner、Vitest、Testing Library
 
-### 前端
-- **React 19**: UI 框架
-- **TypeScript**: 类型安全
-- **Vite**: 构建工具
-- **Tailwind CSS**: 样式框架
-- **Radix UI**: UI 组件库
-- **React Syntax Highlighter**: 代码高亮
-- **Prettier**: 代码格式化
+## 环境要求
 
-## 安装步骤
+- Node.js 18 或更高版本
+- npm
 
-### 环境要求
-
-- Node.js >= 18.0.0
-- npm 或 yarn
-
-### 安装依赖
+## 安装与启动
 
 ```bash
-# 安装后端依赖
 npm install
-
-# 安装前端依赖并构建
-npm run build
+cd web
+npm install
+cd ..
 ```
 
-### 配置环境变量
-
-创建 `.env` 文件（可选）：
-
-```env
-# Ollama 服务地址（云端或本地）
-OLLAMA_HOST=https://ollama.com
-
-# Ollama API 密钥（云端需要）
-OLLAMA_API_KEY=your_api_key_here
-
-# 服务器端口（默认 3000）
-PORT=3000
-```
-
-## 使用方法
-
-### 开发环境（推荐）
-
-项目支持热更新和热重启功能，开发时无需手动重启服务：
+开发环境：
 
 ```bash
-# 启动开发环境（前后端同时运行，支持热更新）
 npm run dev
 ```
 
-开发环境特性：
-- 前端代码修改后自动热更新（HMR），无需刷新页面
-- 后端代码修改后自动重启服务
-- 实时日志显示文件变更和重启状态
+- 前端：http://localhost:5173
+- 后端 API：http://localhost:3000/api
 
-详细配置请参考 [DEVELOPMENT.md](./DEVELOPMENT.md)
-
-### 生产环境
+生产环境：
 
 ```bash
-# 先构建前端
 npm run build
-
-# 然后启动生产服务器
 npm start
-
-# 或使用本地 Ollama 服务
-npm run start:local
-
-# 或指定云端服务
-npm run start:remote
 ```
 
-生产环境启动后，访问 http://localhost:3000
+生产页面默认位于 http://localhost:3000。
 
-**注意**: 生产环境和开发环境的区别：
-- **开发环境**: 访问 http://localhost:5173（前端开发服务器）
-- **生产环境**: 访问 http://localhost:3000（后端服务器提供静态文件）
+可选环境变量只有通用服务器配置：
 
-详细说明请参考 [DEVELOPMENT.md](./DEVELOPMENT.md)
-
-### 使用示例
-
-#### 1. Google Docs 转换
-
-1. 将 Google Docs 文档设置为「任何人均可查看」
-2. 复制文档 URL
-3. 在应用中选择「Google Docs」标签
-4. 粘贴 URL 并点击「立即转换」
-
-#### 2. Markdown 文件转换
-
-1. 在应用中选择「Markdown 文件」标签
-2. 点击上传区域或拖放 .md 文件
-3. 选择 AI 模型
-4. 点击「立即转换」
-
-#### 3. 查看和复制结果
-
-- 转换完成后，可在「代码」或「预览」视图中查看结果
-- 点击「复制」按钮复制 HTML 代码
-
-## 配置说明
-
-### 环境变量
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `OLLAMA_HOST` | Ollama 服务地址 | `https://ollama.com` |
-| `OLLAMA_API_KEY` | Ollama API 密钥 | - |
-| `PORT` | 服务器端口 | `3000` |
-
-### Ollama 模型配置
-
-项目默认使用 `qwen3-coder:480b-cloud` 模型。您可以通过 API 接口获取可用模型列表并选择其他模型。
-
-### 端口配置
-
-默认端口为 3000，可通过环境变量 `PORT` 修改。
-
-## 目录结构
-
-```
-blog-to-html/
-├── server.js              # 后端服务器主文件
-├── package.json           # 后端依赖配置
-├── prompt.txt             # AI 系统提示词
-├── nodemon.json           # 后端热重启配置
-├── DEVELOPMENT.md         # 开发环境文档
-├── README.md              # 项目说明文档
-├── run-local.js           # 本地运行脚本
-├── run-cloud.js           # 云端运行脚本
-├── web/                   # 前端应用目录
-│   ├── src/
-│   │   ├── components/    # React 组件
-│   │   │   └── ui/       # UI 组件库
-│   │   ├── lib/          # 工具函数
-│   │   ├── App.tsx       # 主应用组件
-│   │   └── main.tsx      # 应用入口
-│   ├── public/           # 静态资源
-│   ├── package.json      # 前端依赖配置
-│   └── vite.config.ts    # Vite 配置
-└── .env                  # 环境变量（需自行创建）
+```env
+PORT=3000
+NODE_ENV=production
 ```
 
-## API 接口
+模型的 Base URL、API Key、模型 ID 和自定义请求头全部在页面的“模型 API 设置”中管理。服务端不再读取任何 `OLLAMA_*` 环境变量。
 
-### 获取可用模型
+## 配置模型
+
+首次打开页面时会自动显示设置窗口。选择模板，填写 API Key，获取或手动添加模型，然后保存。
+
+| 服务 | API 格式 | Base URL | 备注 |
+| --- | --- | --- | --- |
+| DeepSeek | OpenAI Compatible | `https://api.deepseek.com` | 内置当前 DeepSeek 模型 ID，可编辑 |
+| DeepSeek | Anthropic Compatible | `https://api.deepseek.com/anthropic` | 使用 Anthropic Messages 格式 |
+| OpenAI | OpenAI Compatible | `https://api.openai.com/v1` | 可通过 `/models` 获取模型 |
+| Anthropic | Anthropic Compatible | `https://api.anthropic.com/v1` | Claude Messages API |
+| Ollama | OpenAI Compatible | `http://localhost:11434/v1` | 本地服务可留空 API Key |
+| 其他代理 | 任一兼容格式 | 服务商提供的完整前缀 | 不会自动追加 `/v1` |
+
+### 模型发现与手动模型
+
+“获取模型”会请求配置 Base URL 下的 `/models`。并非所有兼容代理都实现该接口；发现失败不会影响配置保存，可直接输入模型 ID 后点击“添加”。
+
+### 自定义请求头
+
+高级配置支持租户、代理或非标准认证请求头。为避免请求走私，不允许设置 `Host`、`Content-Length`、`Connection`、`Transfer-Encoding` 等传输层请求头。
+
+### 密钥安全
+
+本项目按本机个人工具设计：
+
+- API Key 以明文保存在当前浏览器的 Local Storage。
+- 密钥仅在模型发现、连接测试或转换时发送到同源 Express 服务，再由服务端转发至配置的模型地址。
+- 服务端不保存、不回传、也不记录 API Key；错误返回会对密钥和自定义头值脱敏。
+- 不要在公共电脑使用。清理该站点的浏览器数据会删除全部配置和 API Key。
+- 若要部署为公网或多人服务，应先增加登录、用户隔离、服务端密钥库和 SSRF 防护。
+
+## API
+
+### 发现模型
 
 ```http
-GET /api/models
+POST /api/models/discover
+Content-Type: application/json
 ```
 
-**响应示例**:
 ```json
 {
-  "models": ["qwen3-coder:480b-cloud", "llama3:latest"],
-  "response": {...}
+  "provider": {
+    "protocol": "openai-compatible",
+    "baseUrl": "https://api.example.com/v1",
+    "apiKey": "your-key",
+    "headers": {}
+  }
 }
 ```
 
-### 转换内容
+成功响应：
+
+```json
+{ "models": ["model-a", "model-b"] }
+```
+
+### 测试连接
+
+```http
+POST /api/providers/test
+Content-Type: application/json
+```
+
+```json
+{
+  "provider": {
+    "protocol": "anthropic-compatible",
+    "baseUrl": "https://api.example.com/v1",
+    "apiKey": "your-key",
+    "headers": {}
+  },
+  "model": "model-id"
+}
+```
+
+该接口会执行一个最多输出少量 token 的真实请求，可能产生极少量费用。
+
+### 转换
 
 ```http
 POST /api/convert
 Content-Type: application/json
+```
 
+Google Docs：
+
+```json
 {
-  "sourceType": "googledocs" | "md",
-  "url": "https://docs.google.com/document/d/...",  // Google Docs URL
-  "content": "# Markdown content",                  // Markdown 内容
-  "model": "qwen3-coder:480b-cloud"                // 模型名称
+  "sourceType": "googledocs",
+  "url": "https://docs.google.com/document/d/...",
+  "model": "model-id",
+  "provider": {
+    "protocol": "openai-compatible",
+    "baseUrl": "https://api.example.com/v1",
+    "apiKey": "your-key",
+    "headers": {}
+  }
 }
 ```
 
-**响应**: Server-Sent Events (SSE) 流式响应
+Markdown 使用相同结构，将 `url` 替换为 `content`，并将 `sourceType` 设为 `md`。
 
-```json
-// 数据块
-{"type": "chunk", "content": "<section>"}
+响应为 SSE：
 
-// 验证结果
-{"type": "validation", "valid": true, "errors": []}
-
-// 完成
-{"type": "done"}
-
-// 错误
-{"type": "error", "message": "错误信息"}
+```text
+data: {"type":"chunk","content":"<section>"}
+data: {"type":"validation","valid":true,"errors":[]}
+data: {"type":"done"}
 ```
 
-### 上传文件
-
-```http
-POST /api/upload
-Content-Type: multipart/form-data
-
-file: [Markdown 文件]
-```
-
-**响应示例**:
-```json
-{
-  "content": "# Markdown 文件内容"
-}
-```
-
-## 开发指南
-
-### 开发环境
-
-项目已配置完整的开发环境，支持热更新和热重启功能：
+## 测试
 
 ```bash
-# 启动开发环境（前后端同时运行）
-npm run dev
+# 后端适配、模型发现、错误脱敏和 SSE 集成测试
+npm test
 
-# 仅启动后端（带热重启）
-npm run dev:backend
+# 前端设置、持久化和转换请求测试
+npm --prefix web test
 
-# 仅启动前端（带 HMR）
-npm run dev:frontend
+# 静态检查与生产构建
+npm --prefix web run lint
+npm --prefix web run build
 ```
 
-详细配置请参考 [DEVELOPMENT.md](./DEVELOPMENT.md)
+## 项目结构
 
-### 构建前端
-
-```bash
-npm run build
+```text
+blog-to-html/
+├── server.js                    # Express 入口与业务路由
+├── server/llm.js                # 通用模型适配、校验、发现和错误处理
+├── tests/llm.test.js            # 后端与 SSE 集成测试
+├── prompt.txt                   # 文档转 HTML 系统提示词
+└── web/src/
+    ├── App.tsx                  # 转换主界面
+    └── features/model-settings/ # 模型档案、设置 UI、存储与 API
 ```
 
-### 代码规范
+## 支持边界
 
-- 使用 TypeScript 进行类型检查
-- 遵循 ESLint 规则
-- 使用 Prettier 格式化代码
-
-## 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 许可证
-
-本项目采用 ISC 许可证。
-
-## 常见问题
-
-### Q: Google Docs 转换失败怎么办？
-
-A: 请确保文档已设置为「任何人均可查看」，并且文档支持 Markdown 导出。
-
-### Q: 如何使用本地 Ollama 模型？
-
-A: 安装 Ollama 后，使用 `npm run start:local` 启动服务，或设置环境变量 `OLLAMA_HOST=http://localhost:11434`。
-
-### Q: 支持哪些 Markdown 语法？
-
-A: 支持标准 Markdown 语法，包括标题、列表、表格、链接、图片等。具体转换规则请参考 `prompt.txt` 文件。
-
-### Q: 生成的 HTML 代码可以自定义样式吗？
-
-A: 生成的 HTML 代码不包含样式属性，您可以根据需要添加自定义 CSS 样式。
-
-## 联系方式
-
-如有问题或建议，欢迎提交 Issue 或 Pull Request。
-
----
-
-**Semantic HTML • Precise Transformation • Cloud Ready**
+“任意模型”指提供 OpenAI Chat Completions-compatible 或 Anthropic Messages-compatible 文本生成接口的服务。不兼容这两种协议的专有 API 需要额外编写 Provider。
