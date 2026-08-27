@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 import { MODEL_SETTINGS_STORAGE_KEY } from './features/model-settings/storage'
-import type { StoredModelSettingsV1 } from './features/model-settings/types'
+import { DEFAULT_GENERATION_SETTINGS, type StoredModelSettingsV1 } from './features/model-settings/types'
 
 const configuredSettings: StoredModelSettingsV1 = {
   version: 1,
@@ -20,6 +20,7 @@ const configuredSettings: StoredModelSettingsV1 = {
     },
     models: ['deepseek-test'],
     selectedModel: 'deepseek-test',
+    generation: { ...DEFAULT_GENERATION_SETTINGS },
   }],
 }
 
@@ -72,6 +73,35 @@ describe('App model settings', () => {
     const body = JSON.parse(String(capturedInit?.body))
     expect(body.model).toBe('deepseek-test')
     expect(body.provider).toEqual(configuredSettings.profiles[0]?.provider)
+    expect(body.generation).toEqual(DEFAULT_GENERATION_SETTINGS)
     await waitFor(() => expect(screen.getByText(/生成完成/)).toBeInTheDocument())
+  })
+
+  it('shows an explicit error instead of success when the model reports truncation', async () => {
+    localStorage.setItem(MODEL_SETTINGS_STORAGE_KEY, JSON.stringify(configuredSettings))
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode([
+            'data: {"type":"chunk","content":"<section><h2>Incomplete"}',
+            'data: {"type":"finish","finishReason":"length","truncated":true,"continuationsUsed":2,"message":"模型输出达到长度上限，结果不完整"}',
+            'data: {"type":"validation","valid":false,"errors":["标签未闭合"]}',
+            'data: {"type":"done"}',
+            '',
+          ].join('\n\n')))
+          controller.close()
+        },
+      })
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    }))
+
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('Google Docs 链接'), {
+      target: { value: 'https://docs.google.com/document/d/test/edit' },
+    })
+    await userEvent.click(screen.getByRole('button', { name: /立即转换/ }))
+
+    await waitFor(() => expect(screen.getByText('模型输出达到长度上限，结果不完整')).toBeInTheDocument())
+    expect(screen.queryByText(/生成完成/)).not.toBeInTheDocument()
   })
 })

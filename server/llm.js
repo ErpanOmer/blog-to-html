@@ -60,12 +60,28 @@ export const testRequestSchema = z.object({
   model: z.string().trim().min(1, '模型 ID 不能为空'),
 })
 
+export const DEFAULT_GENERATION_SETTINGS = Object.freeze({
+  contextWindowTokens: 128_000,
+  maxOutputTokens: 8_192,
+  continuationRounds: 2,
+})
+
+export const generationSettingsSchema = z.object({
+  contextWindowTokens: z.number().int().min(4_096).max(2_000_000),
+  maxOutputTokens: z.number().int().min(256).max(262_144),
+  continuationRounds: z.number().int().min(0).max(5),
+}).refine(
+  (settings) => settings.maxOutputTokens < settings.contextWindowTokens,
+  { message: '单次最大输出必须小于上下文窗口' },
+)
+
 export const conversionRequestSchema = z.object({
   sourceType: z.enum(['googledocs', 'md']),
   url: z.string().optional(),
   content: z.string().optional(),
   model: z.string().trim().min(1, '模型 ID 不能为空'),
   provider: providerConnectionSchema,
+  generation: generationSettingsSchema.default(DEFAULT_GENERATION_SETTINGS),
 })
 
 export class PublicError extends Error {
@@ -185,13 +201,18 @@ export async function testProvider(rawProvider, modelId, { signal } = {}) {
   }
 }
 
-export function streamConversion(rawProvider, modelId, systemPrompt, inputContent, { signal } = {}) {
+export function streamConversion(rawProvider, modelId, systemPrompt, inputContent, {
+  signal,
+  maxOutputTokens,
+  messages,
+} = {}) {
   const provider = providerConnectionSchema.parse(rawProvider)
   try {
     return streamText({
       model: createLanguageModel(provider, modelId),
       system: systemPrompt,
-      prompt: inputContent,
+      ...(messages ? { messages } : { prompt: inputContent }),
+      maxOutputTokens,
       abortSignal: signal,
     })
   } catch (error) {

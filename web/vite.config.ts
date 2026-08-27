@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { getBackendPort, getFrontendPort } from '../server/ports.js'
+
+const frontendPort = getFrontendPort()
+const backendPort = getBackendPort()
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -12,13 +16,13 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    strictPort: false,
+    port: frontendPort,
+    strictPort: true,
     host: true,
     open: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${backendPort}`,
         changeOrigin: true,
         secure: false,
       },

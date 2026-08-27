@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { discoverProviderModels, testProviderConnection } from './api'
 import {
+  DEFAULT_GENERATION_SETTINGS,
   PROFILE_PRESETS,
   createProfileId,
   createProfileFromPreset,
@@ -46,6 +47,7 @@ function normalizeProfile(profile: ModelProfile): ModelProfile {
     provider: { ...profile.provider, baseUrl: profile.provider.baseUrl.trim() },
     models,
     selectedModel: models.includes(profile.selectedModel) ? profile.selectedModel : models[0] || '',
+    generation: { ...DEFAULT_GENERATION_SETTINGS, ...profile.generation },
   }
 }
 
@@ -98,6 +100,14 @@ export function ModelSettingsDialog({
     setMessage(null)
   }
 
+  const updateGeneration = (update: Partial<ModelProfile['generation']>) => {
+    setDraft((current) => current ? {
+      ...current,
+      generation: { ...current.generation, ...update },
+    } : current)
+    setMessage(null)
+  }
+
   const addModel = () => {
     if (!draft || !modelInput.trim()) return
     const model = modelInput.trim()
@@ -146,6 +156,24 @@ export function ModelSettingsDialog({
     }
     if (draft.models.length === 0) return '请获取或手动添加至少一个模型'
     if (!draft.selectedModel) return '请选择默认模型'
+    if (!Number.isInteger(draft.generation.contextWindowTokens) ||
+      draft.generation.contextWindowTokens < 4_096 ||
+      draft.generation.contextWindowTokens > 2_000_000) {
+      return '上下文窗口必须是 4,096–2,000,000 之间的整数'
+    }
+    if (!Number.isInteger(draft.generation.maxOutputTokens) ||
+      draft.generation.maxOutputTokens < 256 ||
+      draft.generation.maxOutputTokens > 262_144) {
+      return '单次最大输出必须是 256–262,144 之间的整数'
+    }
+    if (draft.generation.maxOutputTokens >= draft.generation.contextWindowTokens) {
+      return '单次最大输出必须小于上下文窗口'
+    }
+    if (!Number.isInteger(draft.generation.continuationRounds) ||
+      draft.generation.continuationRounds < 0 ||
+      draft.generation.continuationRounds > 5) {
+      return '自动续写次数必须是 0–5 之间的整数'
+    }
     return null
   }
 
@@ -381,6 +409,54 @@ export function ModelSettingsDialog({
                         <X className="h-3 w-3" onClick={(event) => { event.stopPropagation(); removeModel(model) }} />
                       </button>
                     ))}
+                  </div>
+                </section>
+
+                <section className="space-y-4 border-t border-gray-200 pt-5 dark:border-white/10">
+                  <div>
+                    <h3 className="text-base font-semibold">生成长度</h3>
+                    <p className="text-xs text-gray-500">按当前模型的官方限制填写；设置只控制请求预算，不能放大模型自身的硬上限。</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium">上下文窗口</span>
+                      <Input
+                        type="number"
+                        min={4096}
+                        max={2000000}
+                        step={1024}
+                        value={draft.generation.contextWindowTokens}
+                        onChange={(event) => updateGeneration({ contextWindowTokens: Number(event.target.value) })}
+                      />
+                      <span className="block text-xs text-gray-500">输入与输出合计 token</span>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium">单次最大输出</span>
+                      <Input
+                        type="number"
+                        min={256}
+                        max={262144}
+                        step={256}
+                        value={draft.generation.maxOutputTokens}
+                        onChange={(event) => updateGeneration({ maxOutputTokens: Number(event.target.value) })}
+                      />
+                      <span className="block text-xs text-gray-500">传给模型的 max tokens</span>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium">自动续写次数</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={5}
+                        step={1}
+                        value={draft.generation.continuationRounds}
+                        onChange={(event) => updateGeneration({ continuationRounds: Number(event.target.value) })}
+                      />
+                      <span className="block text-xs text-gray-500">因 length 停止时继续</span>
+                    </label>
+                  </div>
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+                    默认输出 8,192 token，最多自动续写 2 次。提高数值可能增加费用；如果服务端不支持所填上限，请按该模型文档调低。
                   </div>
                 </section>
 

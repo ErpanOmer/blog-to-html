@@ -38,8 +38,8 @@ cd ..
 npm run dev
 ```
 
-- 前端：http://localhost:5173
-- 后端 API：http://localhost:3000/api
+- 前端：http://localhost:38472
+- 后端 API：http://localhost:38471/api
 
 生产环境：
 
@@ -48,14 +48,43 @@ npm run build
 npm start
 ```
 
-生产页面默认位于 http://localhost:3000。
+生产页面默认位于 http://localhost:38471。
 
-可选环境变量只有通用服务器配置：
+可选环境变量用于配置本地访问端口：
 
 ```env
-PORT=3000
+BACKEND_PORT=38471
+FRONTEND_PORT=38472
 NODE_ENV=production
 ```
+
+开发模式下，Vite 会将页面里的 `/api` 请求代理到 `BACKEND_PORT`。因此前后端端口会自动保持一致；无需修改 React 中的接口路径。默认采用 `38471`（后端）和 `38472`（前端）这组较少占用的端口，且启动时会严格使用它们，不会悄悄切换到其他端口。
+
+本项目不会自动读取 `.env`。如需临时或持久地换端口，请在**同一个 PowerShell 窗口**中设置两个变量后启动：
+
+```powershell
+$env:BACKEND_PORT = '43181'
+$env:FRONTEND_PORT = '43182'
+npm run dev
+```
+
+生产模式只需设置后端端口：
+
+```powershell
+$env:BACKEND_PORT = '43181'
+npm start
+```
+
+端口需为 `1024–65535` 的整数；修改后要重启开发服务。为了兼容原有启动方式，`PORT` 仍可代替 `BACKEND_PORT`，但前者优先级较低。
+
+Google Docs 下载会依次使用 `GOOGLE_DOCS_PROXY`、`HTTPS_PROXY`、`HTTP_PROXY`；在 Windows 本机运行时，如果这些变量都没有设置，还会自动读取当前用户的系统代理。非 Windows 环境或需要覆盖系统代理时，可在 PowerShell 中显式设置：
+
+```powershell
+$env:GOOGLE_DOCS_PROXY = 'http://127.0.0.1:7897'
+npm run dev
+```
+
+`GOOGLE_DOCS_PROXY` 只用于 Google Docs 下载，不会改变模型 API 或本地 Ollama 的网络路径。修改代理配置后需要重启后端进程。
 
 模型的 Base URL、API Key、模型 ID 和自定义请求头全部在页面的“模型 API 设置”中管理。服务端不再读取任何 `OLLAMA_*` 环境变量。
 
@@ -75,6 +104,16 @@ NODE_ENV=production
 ### 模型发现与手动模型
 
 “获取模型”会请求配置 Base URL 下的 `/models`。并非所有兼容代理都实现该接口；发现失败不会影响配置保存，可直接输入模型 ID 后点击“添加”。
+
+### 生成长度与上下文窗口
+
+每个配置档案都可以独立设置：
+
+- **上下文窗口**：填写模型实际支持的输入与输出 token 总上限。它用于发送前的预算检查，不能放大模型自身的硬上限。
+- **单次最大输出**：作为 `maxOutputTokens` 发送给模型。默认 `8,192` token。
+- **自动续写次数**：模型以 `length` 原因停止时，携带已有输出继续生成。默认最多续写 `2` 次，允许设置为 `0–5`。
+
+转换完成后页面会显示模型返回的输出 token 用量。若达到长度上限且续写后仍未完成，页面会明确提示结果被截断，不再将其显示为“生成完成”。提高输出或续写次数可能增加模型调用费用；具体上限应以所用模型和代理服务的文档为准。
 
 ### 自定义请求头
 

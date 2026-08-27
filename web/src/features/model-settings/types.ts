@@ -7,12 +7,25 @@ export type ProviderConnection = {
   headers: Record<string, string>
 }
 
+export type GenerationSettings = {
+  contextWindowTokens: number
+  maxOutputTokens: number
+  continuationRounds: number
+}
+
+export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
+  contextWindowTokens: 128_000,
+  maxOutputTokens: 8_192,
+  continuationRounds: 2,
+}
+
 export type ModelProfile = {
   id: string
   name: string
   provider: ProviderConnection
   models: string[]
   selectedModel: string
+  generation: GenerationSettings
 }
 
 export type StoredModelSettingsV1 = {
@@ -97,5 +110,6 @@ export function createProfileFromPreset(preset: ProfilePreset): ModelProfile {
     },
     models: [...preset.models],
     selectedModel: preset.models[0] || '',
+    generation: { ...DEFAULT_GENERATION_SETTINGS },
   }
 }

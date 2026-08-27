@@ -4,6 +4,8 @@ import { after, before, describe, test } from 'node:test'
 
 import { createApp } from '../server.js'
 import {
+  DEFAULT_GENERATION_SETTINGS,
+  conversionRequestSchema,
   discoverModels,
   normalizeProviderError,
   providerConnectionSchema,
@@ -45,6 +47,24 @@ describe('provider configuration', () => {
     assert.equal(normalizeProviderError({ status: 401 }, openAiProvider('https://example.com')).code, 'authentication_failed')
     assert.equal(normalizeProviderError({ status: 404 }, openAiProvider('https://example.com')).code, 'not_found')
     assert.equal(normalizeProviderError({ status: 429 }, openAiProvider('https://example.com')).code, 'rate_limited')
+  })
+
+  test('defaults and validates generation length settings', () => {
+    const baseRequest = {
+      sourceType: 'md',
+      content: '# Test',
+      model: 'test-model',
+      provider: openAiProvider('https://example.com/v1'),
+    }
+    assert.deepEqual(conversionRequestSchema.parse(baseRequest).generation, DEFAULT_GENERATION_SETTINGS)
+    assert.equal(conversionRequestSchema.safeParse({
+      ...baseRequest,
+      generation: {
+        contextWindowTokens: 4_096,
+        maxOutputTokens: 4_096,
+        continuationRounds: 0,
+      },
+    }).success, false)
   })
 })
 
@@ -102,13 +122,20 @@ describe('compatible provider calls and Express SSE', () => {
     upstream = http.createServer(async (req, res) => {
       let body = ''
       for await (const chunk of req) body += chunk
-      requests.push({ url: req.url, headers: req.headers, body: JSON.parse(body || '{}') })
+      const payload = JSON.parse(body || '{}')
+      requests.push({ url: req.url, headers: req.headers, body: payload })
 
       if (req.url === '/v1/chat/completions') {
+        const isContinuation = payload.model === 'length-model' &&
+          payload.messages?.some((message) => message.role === 'assistant')
+        const content = payload.model === 'length-model'
+          ? isContinuation ? '<p>continued</p></section>' : '<section><h2>Long</h2>'
+          : '<section><h2>Title</h2></section>'
+        const finishReason = payload.model === 'length-model' && !isContinuation ? 'length' : 'stop'
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'fake-model', choices: [{ index: 0, delta: { role: 'assistant', content: '<section><h2>Title</h2>' }, finish_reason: null }] })}\n\n`)
-        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'fake-model', choices: [{ index: 0, delta: { content: '</section>' }, finish_reason: null }] })}\n\n`)
-        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: 'fake-model', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`)
+        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: payload.model, choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }] })}\n\n`)
+        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: payload.model, choices: [{ index: 0, delta: {}, finish_reason: finishReason }] })}\n\n`)
+        res.write(`data: ${JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion.chunk', created: 1, model: payload.model, choices: [], usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 } })}\n\n`)
         res.end('data: [DONE]\n\n')
         return
       }
@@ -177,5 +204,39 @@ describe('compatible provider calls and Express SSE', () => {
     assert.equal(request.headers.authorization, undefined)
     assert.equal(request.body.model, 'fake-model')
     assert.equal(request.body.messages[0].role, 'system')
+    assert.equal(request.body.max_tokens, 8192)
+    assert.match(text, /"type":"finish"/)
+    assert.match(text, /"truncated":false/)
+  })
+
+  test('automatically continues a response that stops at the output length limit', async () => {
+    const response = await fetch(`http://127.0.0.1:${appPort}/api/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceType: 'md',
+        content: '# Long test',
+        model: 'length-model',
+        provider: openAiProvider(`http://127.0.0.1:${upstreamPort}/v1`, ''),
+        generation: {
+          contextWindowTokens: 32_000,
+          maxOutputTokens: 512,
+          continuationRounds: 1,
+        },
+      }),
+    })
+
+    assert.equal(response.status, 200)
+    const text = await response.text()
+    assert.match(text, /自动续写/)
+    assert.match(text, /<section>/)
+    assert.match(text, /continued/)
+    assert.match(text, /"continuationsUsed":1/)
+    assert.match(text, /"truncated":false/)
+
+    const lengthRequests = requests.filter((item) => item.body.model === 'length-model')
+    assert.equal(lengthRequests.length, 2)
+    assert.equal(lengthRequests[0].body.max_tokens, 512)
+    assert.ok(lengthRequests[1].body.messages.some((message) => message.role === 'assistant'))
   })
 })

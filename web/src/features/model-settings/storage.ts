@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react'
 
-import type { ModelProfile, StoredModelSettingsV1 } from './types'
+import {
+  DEFAULT_GENERATION_SETTINGS,
+  type GenerationSettings,
+  type ModelProfile,
+  type StoredModelSettingsV1,
+} from './types'
 
 export const MODEL_SETTINGS_STORAGE_KEY = 'blog-to-html.model-settings.v1'
 
@@ -11,7 +16,21 @@ function isStringRecord(value: unknown): value is Record<string, string> {
     Object.values(value as Record<string, unknown>).every((item) => typeof item === 'string')
 }
 
-function isProfile(value: unknown): value is ModelProfile {
+function isGenerationSettings(value: unknown): value is GenerationSettings {
+  if (!value || typeof value !== 'object') return false
+  const settings = value as Partial<GenerationSettings>
+  return Number.isInteger(settings.contextWindowTokens) &&
+    Number(settings.contextWindowTokens) >= 4_096 &&
+    Number(settings.contextWindowTokens) <= 2_000_000 &&
+    Number.isInteger(settings.maxOutputTokens) &&
+    Number(settings.maxOutputTokens) >= 256 &&
+    Number(settings.maxOutputTokens) < Number(settings.contextWindowTokens) &&
+    Number.isInteger(settings.continuationRounds) &&
+    Number(settings.continuationRounds) >= 0 &&
+    Number(settings.continuationRounds) <= 5
+}
+
+function isProfile(value: unknown): value is Omit<ModelProfile, 'generation'> & { generation?: GenerationSettings } {
   if (!value || typeof value !== 'object') return false
   const profile = value as Partial<ModelProfile>
   return typeof profile.id === 'string' && typeof profile.name === 'string' &&
@@ -19,7 +38,8 @@ function isProfile(value: unknown): value is ModelProfile {
     profile.models.every((model) => typeof model === 'string') && Boolean(profile.provider) &&
     ['openai-compatible', 'anthropic-compatible'].includes(profile.provider?.protocol || '') &&
     typeof profile.provider?.baseUrl === 'string' && typeof profile.provider?.apiKey === 'string' &&
-    isStringRecord(profile.provider?.headers)
+    isStringRecord(profile.provider?.headers) &&
+    (profile.generation === undefined || isGenerationSettings(profile.generation))
 }
 
 export function loadModelSettings(storage: Pick<Storage, 'getItem'> = localStorage): StoredModelSettingsV1 {
@@ -30,10 +50,14 @@ export function loadModelSettings(storage: Pick<Storage, 'getItem'> = localStora
     if (parsed.version !== 1 || !Array.isArray(parsed.profiles) || !parsed.profiles.every(isProfile)) {
       return { ...EMPTY_SETTINGS, profiles: [] }
     }
-    const activeProfileId = parsed.profiles.some((profile) => profile.id === parsed.activeProfileId)
+    const profiles = parsed.profiles.map((profile) => ({
+      ...profile,
+      generation: { ...DEFAULT_GENERATION_SETTINGS, ...profile.generation },
+    }))
+    const activeProfileId = profiles.some((profile) => profile.id === parsed.activeProfileId)
       ? parsed.activeProfileId || null
-      : parsed.profiles[0]?.id || null
-    return { version: 1, activeProfileId, profiles: parsed.profiles }
+      : profiles[0]?.id || null
+    return { version: 1, activeProfileId, profiles }
   } catch {
     return { ...EMPTY_SETTINGS, profiles: [] }
   }

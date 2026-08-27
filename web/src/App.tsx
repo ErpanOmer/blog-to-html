@@ -32,6 +32,18 @@ type ValidationResult = {
   errors: string[]
 }
 
+type GenerationSummary = {
+  finishReason: string
+  rawFinishReason?: string
+  truncated: boolean
+  continuationsUsed: number
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+  }
+}
+
 function App() {
   const modelSettings = useModelSettings()
   const [settingsOpen, setSettingsOpen] = useState(() => modelSettings.settings.profiles.length === 0)
@@ -43,6 +55,9 @@ function App() {
   const [isConverting, setIsConverting] = useState(false)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [progressMessage, setProgressMessage] = useState('正在生成 HTML...')
+  const [generationSummary, setGenerationSummary] = useState<GenerationSummary | null>(null)
   const [copied, setCopied] = useState(false)
   const [viewMode, setViewMode] = useState<'code' | 'preview'>('code')
   const [timer, setTimer] = useState(0)
@@ -131,6 +146,9 @@ function App() {
     setOutput('')
     setValidation(null)
     setError('')
+    setNotice('')
+    setProgressMessage('正在生成 HTML...')
+    setGenerationSummary(null)
     const controller = new AbortController()
     abortRef.current = controller
 
@@ -141,7 +159,12 @@ function App() {
       const response = await fetch('/api/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...source, model: profile.selectedModel, provider: profile.provider }),
+        body: JSON.stringify({
+          ...source,
+          model: profile.selectedModel,
+          provider: profile.provider,
+          generation: profile.generation,
+        }),
         signal: controller.signal,
       })
 
@@ -173,6 +196,15 @@ function App() {
               valid?: boolean
               errors?: string[]
               message?: string
+              finishReason?: string
+              rawFinishReason?: string
+              truncated?: boolean
+              continuationsUsed?: number
+              usage?: GenerationSummary['usage']
+              estimatedInputTokens?: number
+              contextWindowTokens?: number
+              requestedMaxOutputTokens?: number
+              effectiveMaxOutputTokens?: number
             }
             if (data.type === 'chunk') {
               fullOutput += data.content || ''
@@ -182,6 +214,29 @@ function App() {
             } else if (data.type === 'error') {
               streamError = data.message || '转换失败'
               setError(streamError)
+            } else if (data.type === 'progress') {
+              setProgressMessage(data.message || '正在继续生成 HTML...')
+            } else if (data.type === 'warning') {
+              setNotice(data.message || '模型服务未完全支持当前生成参数')
+            } else if (data.type === 'budget') {
+              if ((data.effectiveMaxOutputTokens || 0) < (data.requestedMaxOutputTokens || 0)) {
+                setNotice(
+                  `预计输入约 ${(data.estimatedInputTokens || 0).toLocaleString()} token；受 ${(data.contextWindowTokens || 0).toLocaleString()} token 上下文窗口限制，本轮最大输出已调整为 ${(data.effectiveMaxOutputTokens || 0).toLocaleString()} token。`,
+                )
+              }
+            } else if (data.type === 'finish') {
+              const summary: GenerationSummary = {
+                finishReason: data.finishReason || 'other',
+                rawFinishReason: data.rawFinishReason,
+                truncated: Boolean(data.truncated),
+                continuationsUsed: data.continuationsUsed || 0,
+                usage: data.usage,
+              }
+              setGenerationSummary(summary)
+              if (summary.truncated) {
+                streamError = data.message || '模型输出达到长度上限，结果可能不完整'
+                setError(streamError)
+              }
             }
           } catch {
             // Ignore an isolated malformed SSE line and continue consuming the stream.
@@ -374,16 +429,27 @@ function App() {
             </CardHeader>
             <CardContent className="space-y-4">
               {error && <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"><AlertCircle className="h-5 w-5 shrink-0" /><p className="text-sm">{error}</p></div>}
+              {notice && <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"><AlertCircle className="h-5 w-5 shrink-0" /><p className="text-sm">{notice}</p></div>}
               {isConverting && (
                 <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-500/20 dark:bg-blue-500/10">
-                  <div className="flex items-center gap-3 text-sm font-medium text-blue-700 dark:text-blue-300"><span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />正在生成 HTML...</div>
+                  <div className="flex items-center gap-3 text-sm font-medium text-blue-700 dark:text-blue-300"><span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />{progressMessage}</div>
                   <div className="flex items-center gap-1.5 rounded-lg bg-blue-100 px-2.5 py-1 text-xs font-mono text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"><Clock3 className="h-3.5 w-3.5" />{Math.max(timer, 0.1).toFixed(1)}s</div>
                 </div>
               )}
-              {lastDuration !== null && !isConverting && output && (
+              {lastDuration !== null && !isConverting && output && !error && (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
                   <Check className="h-5 w-5" />生成完成，总耗时 {lastDuration.toFixed(2)}s
                   {validation?.valid && <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs dark:bg-emerald-500/20">HTML 验证通过</span>}
+                  {generationSummary?.usage?.outputTokens !== undefined && (
+                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs dark:bg-emerald-500/20">
+                      输出 {generationSummary.usage.outputTokens.toLocaleString()} token
+                    </span>
+                  )}
+                  {generationSummary && generationSummary.continuationsUsed > 0 && (
+                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs dark:bg-emerald-500/20">
+                      自动续写 {generationSummary.continuationsUsed} 次
+                    </span>
+                  )}
                 </div>
               )}
               {validation && !validation.valid && <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="text-sm font-medium">HTML 校验提示</p><p className="mt-1 text-xs">{validation.errors[0]}</p></div></div>}

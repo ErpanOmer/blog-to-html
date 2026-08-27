@@ -10,18 +10,27 @@ npm run dev
 
 开发模式同时运行：
 
-- Express API：`http://localhost:3000`
-- Vite 前端：`http://localhost:5173`
+- Express API：`http://localhost:38471`
+- Vite 前端：`http://localhost:38472`
 - Vite 将 `/api` 代理到 Express；前端和后端修改均支持热更新。
 
 模型凭证不使用环境变量。打开前端后，在“模型 API 设置”中创建浏览器本地配置。`.env` 仅在需要时用于通用进程变量，例如：
 
 ```env
-PORT=3000
+BACKEND_PORT=38471
+FRONTEND_PORT=38472
 NODE_ENV=development
 ```
 
-当前 `npm start` 和 nodemon 不主动加载 `.env`，避免将模型凭证绑定到进程。若需要环境变量，请在启动终端中设置，或由进程管理器注入。
+当前 `npm start` 和 nodemon 不主动加载 `.env`，避免将模型凭证绑定到进程。若需要环境变量，请在启动终端中设置，或由进程管理器注入。`BACKEND_PORT` 同时用于 Express 和 Vite 的 `/api` 代理目标，`FRONTEND_PORT` 用于 Vite 页面；两者必须在同一个终端中设置后再启动：
+
+```powershell
+$env:BACKEND_PORT = '38471'
+$env:FRONTEND_PORT = '38472'
+npm run dev
+```
+
+默认端口就是上面的冷门端口。若再次与其他程序冲突，只需改成两个不同的 `1024–65535` 整数后重启；旧的 `PORT` 仍可作为后端端口的兼容写法。
 
 ## 模型调用架构
 

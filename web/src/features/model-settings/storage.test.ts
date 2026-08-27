@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { loadModelSettings, MODEL_SETTINGS_STORAGE_KEY, saveModelSettings } from './storage'
-import type { StoredModelSettingsV1 } from './types'
+import { DEFAULT_GENERATION_SETTINGS, type StoredModelSettingsV1 } from './types'
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))
@@ -25,6 +25,7 @@ const validSettings: StoredModelSettingsV1 = {
     },
     models: ['deepseek-v4-pro'],
     selectedModel: 'deepseek-v4-pro',
+    generation: { ...DEFAULT_GENERATION_SETTINGS },
   }],
 }
 
@@ -41,6 +42,18 @@ describe('model settings storage', () => {
 
     const future = memoryStorage({ [MODEL_SETTINGS_STORAGE_KEY]: JSON.stringify({ ...validSettings, version: 2 }) })
     expect(loadModelSettings(future)).toEqual({ version: 1, activeProfileId: null, profiles: [] })
+  })
+
+  it('migrates profiles saved before generation limits were introduced', () => {
+    const legacy = structuredClone(validSettings) as unknown as {
+      profiles: Array<Record<string, unknown>>
+    }
+    delete legacy.profiles[0]?.generation
+    const storage = memoryStorage({
+      [MODEL_SETTINGS_STORAGE_KEY]: JSON.stringify(legacy),
+    })
+
+    expect(loadModelSettings(storage).profiles[0]?.generation).toEqual(DEFAULT_GENERATION_SETTINGS)
   })
 
   it('selects the first valid profile when the saved active id no longer exists', () => {
